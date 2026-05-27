@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --color-accent: #6366f1;
+  --radius-card: 16px;
+}
+
+:root {
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-panel: rgba(255, 255, 255, 0.88);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+.dark {
+  --bg-glass: rgba(24, 24, 27, 0.78);
+  --bg-panel: rgba(24, 24, 27, 0.92);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-subtle);
+}
+
+.clip-card {
+  width: 240px;
+  height: 320px;
+  border-radius: var(--radius-card);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-card);
+}
+
+.clip-card.selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 40%, transparent),
+    var(--shadow-card);
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4);
+  border-radius: 3px;
+}
