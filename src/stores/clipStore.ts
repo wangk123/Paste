@@ -11,16 +11,19 @@ interface ClipStore {
   categoryId: string;
   searchQuery: string;
   loading: boolean;
-  showSettings: boolean;
   showPreview: boolean;
   previewClip: Clip | null;
+  showOcr: boolean;
+  ocrLoading: boolean;
+  ocrText: string;
   stats: [number, number];
 
   setCategory: (id: string) => void;
   setSearch: (q: string) => void;
   select: (id: string | null, index?: number) => void;
-  setShowSettings: (v: boolean) => void;
   setShowPreview: (v: boolean, clip?: Clip | null) => void;
+  openOcr: (clip: Clip) => Promise<void>;
+  closeOcr: () => void;
   load: () => Promise<void>;
   loadCategories: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -37,9 +40,11 @@ export const useClipStore = create<ClipStore>((set, get) => ({
   categoryId: "all",
   searchQuery: "",
   loading: false,
-  showSettings: false,
   showPreview: false,
   previewClip: null,
+  showOcr: false,
+  ocrLoading: false,
+  ocrText: "",
   stats: [0, 0],
 
   setCategory: (id) => {
@@ -61,9 +66,25 @@ export const useClipStore = create<ClipStore>((set, get) => ({
     });
   },
 
-  setShowSettings: (v) => set({ showSettings: v }),
   setShowPreview: (v, clip) =>
     set({ showPreview: v, previewClip: clip ?? null }),
+
+  openOcr: async (clip) => {
+    if (clip.type !== "image") return;
+    set({ showOcr: true, ocrLoading: true, ocrText: "" });
+    try {
+      const text = await ipc.imageOcr(clip.content);
+      set({ ocrText: text || "未识别到文字" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "OCR 识别失败";
+      set({ ocrText: msg });
+      useToast.getState().show(msg);
+    } finally {
+      set({ ocrLoading: false });
+    }
+  },
+
+  closeOcr: () => set({ showOcr: false, ocrLoading: false, ocrText: "" }),
 
   load: async () => {
     set({ loading: true });

@@ -182,7 +182,7 @@ impl Db {
             }
         }
 
-        sql.push_str(" ORDER BY pinned DESC, created_at DESC LIMIT ?1 OFFSET ?2");
+        sql.push_str(" ORDER BY created_at DESC LIMIT ?1 OFFSET ?2");
 
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
@@ -225,7 +225,7 @@ impl Db {
             FROM clips c
             INNER JOIN clips_fts fts ON c.rowid = fts.rowid
             WHERE clips_fts MATCH ?1
-            ORDER BY c.pinned DESC, c.created_at DESC
+            ORDER BY c.created_at DESC
             LIMIT ?2 OFFSET ?3
         ";
 
@@ -501,19 +501,24 @@ pub fn detect_clip_type(text: &str) -> (String, Option<String>) {
     if looks_like_markdown(trimmed) {
         return ("markdown".into(), None);
     }
-    if trimmed.starts_with('/') || trimmed.starts_with("file://") {
-        return ("file".into(), None);
-    }
     ("text".into(), None)
 }
 
 fn looks_like_code(s: &str) -> bool {
-    let indicators = [
+    let strong_indicators = [
         "fn ", "function ", "const ", "let ", "var ", "class ", "import ", "export ",
         "public ", "private ", "def ", "package ", "#include", "using namespace",
         "interface ", "impl ", "async ", "await ",
     ];
-    indicators.iter().any(|i| s.contains(i))
+    let count = strong_indicators.iter().filter(|i| s.contains(**i)).count();
+    let has_symbols = s.contains('{')
+        || s.contains('}')
+        || s.contains("=>")
+        || s.contains("::")
+        || s.contains("();")
+        || s.contains("==");
+    let has_line_break = s.contains('\n');
+    count >= 2 || (count >= 1 && has_symbols && has_line_break)
 }
 
 fn looks_like_markdown(s: &str) -> bool {
@@ -542,3 +547,4 @@ fn detect_language(s: &str) -> Option<String> {
     }
     None
 }
+

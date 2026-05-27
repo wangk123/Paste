@@ -56,12 +56,19 @@ export const hideWindow = () => invoke<void>("hide_window");
 
 export const showWindow = () => invoke<void>("show_window");
 
+export const showSettingsWindow = () => invoke<void>("show_settings_window_cmd");
+
+export const hideSettingsWindow = () => invoke<void>("hide_settings_window_cmd");
+
 export const runCleanup = () => invoke<number>("run_cleanup");
 
 export const getStats = () => invoke<[number, number]>("get_stats");
 
 export const readImageBase64 = (path: string) =>
   invoke<string>("read_image_base64", { path });
+
+export const imageOcr = (path: string) =>
+  invoke<string>("image_ocr", { path });
 
 export const openAccessibilitySettings = () =>
   invoke<void>("open_accessibility_settings");

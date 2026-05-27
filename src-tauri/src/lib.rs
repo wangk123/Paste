@@ -14,7 +14,6 @@ use storage::db::Db;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter,
 };
 
 pub struct AppState {
@@ -66,10 +65,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "show" => shortcuts::manager::show_main_window(app),
-                    "settings" => {
-                        shortcuts::manager::show_main_window(app);
-                        let _ = app.emit("open-settings", ());
-                    }
+                    "settings" => shortcuts::manager::show_settings_window(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -90,6 +86,7 @@ pub fn run() {
                 std::thread::sleep(std::time::Duration::from_secs(10));
                 start_cleanup_task(db_cleanup);
             });
+            shortcuts::manager::setup_main_window_events(&handle);
             clipboard::watcher::start_watcher(handle.clone(), db.clone());
 
             // 仅供故障排查：PASTE_AUTO_SHOW=1 时启动 3 秒后自动呼出面板
@@ -124,9 +121,12 @@ pub fn run() {
             commands::copy_clip,
             commands::hide_window,
             commands::show_window,
+            commands::show_settings_window_cmd,
+            commands::hide_settings_window_cmd,
             commands::run_cleanup,
             commands::get_stats,
             commands::read_image_base64,
+            commands::image_ocr,
             focus::open_accessibility_settings,
             focus::is_accessibility_granted,
         ])

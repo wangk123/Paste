@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "settings"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
@@ -13,6 +13,9 @@
     "core:window:allow-is-visible",
     "core:window:allow-current-monitor",
     "core:window:allow-outer-size",
+    "core:window:allow-cursor-position",
+    "core:window:allow-available-monitors",
+    "core:window:allow-primary-monitor",
     "core:event:allow-emit",
     "core:event:allow-listen",
     "core:tray:default",

@@ -12,7 +12,6 @@ export function useShortcut() {
   const remove = useClipStore((s) => s.remove);
   const pin = useClipStore((s) => s.pin);
   const refresh = useClipStore((s) => s.refresh);
-  const setShowSettings = useClipStore((s) => s.setShowSettings);
   const setShowPreview = useClipStore((s) => s.setShowPreview);
 
   useEffect(() => {
@@ -21,13 +20,6 @@ export function useShortcut() {
       unlisten.then((fn) => fn());
     };
   }, [refresh]);
-
-  useEffect(() => {
-    const unlisten = listen("open-settings", () => setShowSettings(true));
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [setShowSettings]);
 
   useEffect(() => {
     const handler = async (e: KeyboardEvent) => {

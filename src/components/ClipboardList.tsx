@@ -17,8 +17,10 @@ export function ClipboardList() {
   const paste = useClipStore((s) => s.paste);
   const pin = useClipStore((s) => s.pin);
   const setShowPreview = useClipStore((s) => s.setShowPreview);
+  const openOcr = useClipStore((s) => s.openOcr);
 
   const parentRef = useRef<HTMLDivElement>(null);
+  const lastWheelAt = useRef(0);
 
   const virtualizer = useVirtualizer({
     count: clips.length,
@@ -38,14 +40,23 @@ export function ClipboardList() {
     const el = parentRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      if (clips.length === 0) return;
+      if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+        const now = Date.now();
+        if (now - lastWheelAt.current < 140) return;
+        lastWheelAt.current = now;
         e.preventDefault();
-        el.scrollLeft += e.deltaY;
+        const direction = e.deltaY > 0 ? 1 : -1;
+        const next = Math.max(0, Math.min(clips.length - 1, selectedIndex + direction));
+        select(clips[next]?.id ?? null, next);
+        return;
       }
+      e.preventDefault();
+      el.scrollLeft += e.deltaX;
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [clips, select, selectedIndex]);
 
   if (loading && clips.length === 0) {
     return <ListSkeleton />;
@@ -86,6 +97,7 @@ export function ClipboardList() {
                     onPaste={() => paste(clip.id)}
                     onPin={() => pin(clip.id, !clip.pinned)}
                     onPreview={() => setShowPreview(true, clip)}
+                    onOcr={() => openOcr(clip)}
                   />
                 </div>
               </ClipContextMenu>

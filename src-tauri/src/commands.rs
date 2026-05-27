@@ -1,11 +1,15 @@
 use crate::clipboard::watcher::write_clipboard;
 use crate::focus::restore_focus_and_paste;
 use crate::config::{save_config, AppConfig};
-use crate::shortcuts::manager::{hide_main_window, show_main_window, update_toggle_shortcut};
+use crate::focus::activate_focus_target;
+use crate::shortcuts::manager::{
+    hide_main_window, hide_settings_window, show_main_window, show_settings_window,
+    update_toggle_shortcut,
+};
 use crate::storage::cleanup::run_cleanup_now;
 use crate::storage::models::{Category, Clip, ListClipsParams, SearchClipsParams};
 use crate::AppState;
-use tauri::State;
+use tauri::{Manager, State};
 
 #[tauri::command]
 pub fn list_clips(state: State<AppState>, params: ListClipsParams) -> Result<Vec<Clip>, String> {
@@ -131,9 +135,13 @@ fn paste_clip_inner(
     hide_main_window(app);
 
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        if let Err(e) = activate_focus_target() {
+            eprintln!("[paste] 恢复前台应用失败: {e}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(220));
         if let Err(e) = restore_focus_and_paste(plain) {
-            eprintln!("[paste] CGEvent 注入失败: {e}");
+            eprintln!("[paste] 粘贴注入失败: {e}");
         }
     });
 
@@ -159,6 +167,18 @@ pub fn show_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn show_settings_window_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    show_settings_window(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn hide_settings_window_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    hide_settings_window(&app);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn run_cleanup(state: State<AppState>) -> Result<u32, String> {
     let config = state.config.lock().clone();
     run_cleanup_now(&state.db, &config)
@@ -176,4 +196,23 @@ pub fn read_image_base64(path: String) -> Result<String, String> {
         &base64::engine::general_purpose::STANDARD,
         &data,
     ))
+}
+
+#[tauri::command]
+pub async fn image_ocr(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let resource_dir = app.path().resource_dir().ok();
+        return tokio::task::spawn_blocking(move || {
+            crate::clipboard::macos::run_ocr(&path, resource_dir.as_deref())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("当前系统暂不支持 OCR".into())
+    }
 }

@@ -1,3 +1,4 @@
+use crate::clipboard::files::{decode_file_paths, encode_file_paths, file_preview};
 use crate::clipboard::hash::{hash_bytes, hash_text};
 use crate::config::{load_config, AppConfig};
 use crate::storage::db::{detect_clip_type, preview_text, save_image_with_thumbnail, Db};
@@ -59,9 +60,11 @@ fn read_clipboard(
     config: &AppConfig,
     try_image: bool,
 ) -> Result<Option<Clip>, String> {
-    if let Ok(text) = clipboard.get_text() {
-        if !text.trim().is_empty() {
-            return process_text(&text, config);
+    #[cfg(target_os = "macos")]
+    {
+        let paths = crate::clipboard::macos::read_file_paths();
+        if !paths.is_empty() {
+            return process_files(&paths, config);
         }
     }
 
@@ -71,7 +74,50 @@ fn read_clipboard(
         }
     }
 
+    if let Ok(text) = clipboard.get_text() {
+        if !text.trim().is_empty() {
+            return process_text(&text, config);
+        }
+    }
+
     Ok(None)
+}
+
+fn process_files(paths: &[String], config: &AppConfig) -> Result<Option<Clip>, String> {
+    let existing: Vec<String> = paths
+        .iter()
+        .filter(|p| std::path::Path::new(p).exists())
+        .cloned()
+        .collect();
+    if existing.is_empty() {
+        return Ok(None);
+    }
+
+    let content = encode_file_paths(&existing);
+    let hash = hash_text(&content);
+    let preview = file_preview(&existing);
+    let size: i64 = existing
+        .iter()
+        .filter_map(|p| std::fs::metadata(p).ok())
+        .map(|m| m.len() as i64)
+        .sum();
+    let now = chrono::Utc::now().timestamp();
+
+    Ok(Some(Clip {
+        id: Uuid::new_v4().to_string(),
+        clip_type: "file".into(),
+        content,
+        preview,
+        hash,
+        size,
+        category_id: None,
+        pinned: false,
+        language: None,
+        source_app: None,
+        created_at: now,
+        expires_at: config.expiry_timestamp(),
+        thumbnail_path: None,
+    }))
 }
 
 fn process_image(img: &ImageData, config: &AppConfig) -> Result<Option<Clip>, String> {
@@ -141,6 +187,20 @@ fn process_text(text: &str, config: &AppConfig) -> Result<Option<Clip>, String> 
 
 pub fn write_clipboard(clip: &Clip) -> Result<(), String> {
     set_ignore_next(true);
+
+    if clip.clip_type == "file" {
+        let paths = decode_file_paths(&clip.content);
+        #[cfg(target_os = "macos")]
+        {
+            return crate::clipboard::macos::write_file_paths(&paths);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = paths;
+            return Err("当前系统不支持文件剪贴板".into());
+        }
+    }
+
     let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
 
     match clip.clip_type.as_str() {
