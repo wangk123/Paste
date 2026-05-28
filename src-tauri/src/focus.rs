@@ -1,5 +1,7 @@
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+use serde::Serialize;
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
@@ -56,17 +58,103 @@ pub fn restore_focus_and_paste(plain: bool) -> Result<(), String> {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessibilityInfo {
+    pub granted: bool,
+    pub executable_path: String,
+    pub bundle_id: String,
+    pub signing_id: String,
+    pub signing_stable: bool,
+}
+
 #[cfg(target_os = "macos")]
-pub fn accessibility_trusted() -> bool {
-    extern "C" {
-        fn AXIsProcessTrusted() -> bool;
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXIsProcessTrustedWithOptions(options: *const std::ffi::c_void) -> bool;
+    fn CGPreflightPostEventAccess() -> bool;
+    fn CGRequestPostEventAccess() -> bool;
+}
+
+#[cfg(target_os = "macos")]
+pub fn accessibility_effective() -> bool {
+    unsafe {
+        if AXIsProcessTrustedWithOptions(std::ptr::null()) {
+            return true;
+        }
+        CGPreflightPostEventAccess()
     }
-    unsafe { AXIsProcessTrusted() }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn accessibility_trusted() -> bool {
+pub fn accessibility_effective() -> bool {
     true
+}
+
+#[cfg(target_os = "macos")]
+pub fn request_accessibility_prompt() -> bool {
+    use core_foundation::base::TCFType;
+    use core_foundation::boolean::CFBoolean;
+    use core_foundation::dictionary::CFDictionary;
+    use core_foundation::string::CFString;
+    use std::ffi::c_void;
+
+    unsafe {
+        if AXIsProcessTrustedWithOptions(std::ptr::null()) {
+            return true;
+        }
+
+        let key = CFString::new("AXTrustedCheckOptionPrompt");
+        let value = CFBoolean::true_value();
+        let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
+        if AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef() as *const c_void) {
+            return true;
+        }
+
+        CGRequestPostEventAccess();
+        AXIsProcessTrustedWithOptions(std::ptr::null()) || CGPreflightPostEventAccess()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_accessibility_prompt() -> bool {
+    true
+}
+
+#[cfg(target_os = "macos")]
+fn codesign_details(path: &Path) -> (String, Option<String>) {
+    let output = Command::new("codesign")
+        .arg("-dv")
+        .arg(path)
+        .output()
+        .ok();
+    let Some(output) = output else {
+        return ("unknown".into(), None);
+    };
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut identifier = "unknown".to_string();
+    let mut team = None;
+    for line in text.lines() {
+        if let Some(v) = line.strip_prefix("Identifier=") {
+            identifier = v.trim().to_string();
+        }
+        if let Some(v) = line.strip_prefix("TeamIdentifier=") {
+            let t = v.trim();
+            if !t.is_empty() && t != "not set" {
+                team = Some(t.to_string());
+            }
+        }
+    }
+    (identifier, team)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn codesign_details(_path: &Path) -> (String, Option<String>) {
+    ("unknown".into(), None)
 }
 
 #[cfg(target_os = "macos")]
@@ -101,12 +189,6 @@ fn macos_activate_pid(pid: i32) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn macos_post_paste(plain: bool) -> Result<(), String> {
-    if !accessibility_trusted() {
-        return Err(
-            "未获得辅助功能权限。请在 系统设置 → 隐私与安全性 → 辅助功能 中勾选本应用，然后完全退出再重新打开。".into(),
-        );
-    }
-
     if let Err(e) = macos_post_cmd_v(plain) {
         eprintln!("[paste] CGEvent 注入失败: {e}，回退 enigo");
         return crate::clipboard::watcher::simulate_paste_enigo(plain);
@@ -146,13 +228,40 @@ fn macos_post_cmd_v(plain: bool) -> Result<(), String> {
 
 #[tauri::command]
 pub fn is_accessibility_granted() -> bool {
-    accessibility_trusted()
+    accessibility_effective()
+}
+
+#[tauri::command]
+pub fn request_accessibility() -> bool {
+    request_accessibility_prompt()
+}
+
+#[tauri::command]
+pub fn get_accessibility_info(app: tauri::AppHandle) -> AccessibilityInfo {
+    let bundle_id = app.config().identifier.clone();
+    let executable_path = std::env::current_exe()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "unknown".into());
+    let (signing_id, team_id) = std::env::current_exe()
+        .ok()
+        .map(|p| codesign_details(&p))
+        .unwrap_or_else(|| ("unknown".into(), None));
+    let signing_stable = team_id.is_some() || signing_id == bundle_id;
+
+    AccessibilityInfo {
+        granted: accessibility_effective(),
+        executable_path,
+        bundle_id,
+        signing_id,
+        signing_stable,
+    }
 }
 
 #[tauri::command]
 pub fn open_accessibility_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        request_accessibility_prompt();
         let _ = Command::new("open")
             .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
             .spawn();

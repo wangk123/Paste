@@ -94,9 +94,11 @@ export const useClipStore = create<ClipStore>((set, get) => ({
     try {
       const { searchQuery, categoryId } = get();
       const query = searchQuery.trim();
+      const settings = await ipc.getSettings();
+      const baseLimit = Math.max(50, settings.maxItems || 50);
       const pool = await ipc.listClips({
         categoryId,
-        limit: query ? SEARCH_POOL_LIMIT : 50,
+        limit: query ? Math.max(SEARCH_POOL_LIMIT, baseLimit) : baseLimit,
       });
       const clips = query ? fuzzyFilter(pool, query) : pool;
       const stats = await ipc.getStats();

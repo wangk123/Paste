@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, Category, Clip } from "../types";
+import type { AppConfig, AccessibilityInfo, Category, Clip } from "../types";
 
 export const listClips = (params: {
   offset?: number;
@@ -75,3 +75,9 @@ export const openAccessibilitySettings = () =>
 
 export const isAccessibilityGranted = () =>
   invoke<boolean>("is_accessibility_granted");
+
+export const requestAccessibility = () =>
+  invoke<boolean>("request_accessibility");
+
+export const getAccessibilityInfo = () =>
+  invoke<AccessibilityInfo>("get_accessibility_info");

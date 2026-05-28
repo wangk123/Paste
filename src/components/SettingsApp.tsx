@@ -4,15 +4,16 @@ import {
   Keyboard,
   Palette,
   ShieldCheck,
-  X,
+  type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
-import type { AppConfig } from "../types";
+import type { AccessibilityInfo, AppConfig } from "../types";
 import {
+  getAccessibilityInfo,
   hideSettingsWindow,
-  isAccessibilityGranted,
   openAccessibilitySettings,
+  requestAccessibility,
   runCleanup,
 } from "../lib/ipc";
 import { KeyRecorder } from "./KeyRecorder";
@@ -34,15 +35,28 @@ export function SettingsApp() {
   const load = useSettingsStore((s) => s.load);
   const [local, setLocal] = useState<AppConfig | null>(null);
   const [cleaned, setCleaned] = useState<number | null>(null);
-  const [axGranted, setAxGranted] = useState<boolean | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [axInfo, setAxInfo] = useState<AccessibilityInfo | null>(null);
+  const saveTimer = useRef<number | null>(null);
+  const refreshAccessibility = useCallback(() => {
+    getAccessibilityInfo()
+      .then(setAxInfo)
+      .catch(() =>
+        setAxInfo({
+          granted: false,
+          executablePath: "",
+          bundleId: "",
+          signingId: "",
+          signingStable: false,
+        }),
+      );
+  }, []);
 
   useEffect(() => {
     load();
-    isAccessibilityGranted()
-      .then(setAxGranted)
-      .catch(() => setAxGranted(false));
-  }, [load]);
+    refreshAccessibility();
+    const timer = window.setInterval(refreshAccessibility, 2000);
+    return () => window.clearInterval(timer);
+  }, [load, refreshAccessibility]);
 
   useEffect(() => {
     if (config) setLocal({ ...config });
@@ -59,22 +73,35 @@ export function SettingsApp() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  if (!local) return null;
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
 
-  const update = (patch: Partial<AppConfig>) =>
-    setLocal((prev) => (prev ? { ...prev, ...patch } : prev));
-
-  const close = () => hideSettingsWindow();
-
-  const handleSave = async () => {
-    await save(local);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1400);
+  const update = (patch: Partial<AppConfig>) => {
+    setLocal((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => {
+        save(next);
+      }, 300);
+      return next;
+    });
   };
+
+  if (!local) {
+    return (
+      <div className="h-full flex items-center justify-center bg-[var(--paper)] text-[var(--ink-faint)] text-sm">
+        加载中...
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-[var(--paper)] text-[var(--ink)] paper-grain relative">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-[var(--line)]">
+      <header className="px-6 py-4 border-b border-[var(--line)]">
         <div className="flex items-baseline gap-2.5">
           <h2
             className="text-[20px] leading-none"
@@ -90,12 +117,9 @@ export function SettingsApp() {
             preferences
           </span>
         </div>
-        <button type="button" onClick={close} className="icon-btn">
-          <X className="w-4 h-4" />
-        </button>
       </header>
 
-      <div className="overflow-y-auto flex-1 px-6 py-5 space-y-7">
+      <div className="overflow-y-auto flex-1 px-6 py-5 pb-6 space-y-7">
         <Section icon={Palette} title="外观与历史">
           <Row label="主题">
             <Segmented
@@ -178,19 +202,47 @@ export function SettingsApp() {
 
         <Section icon={ShieldCheck} title="粘贴权限">
           <p className="text-[12px] leading-relaxed text-[var(--ink-soft)] mb-3">
-            选中历史后会自动贴回唤起前的应用。需在「系统设置 → 隐私与安全性 →
-            辅助功能」中勾选 Paste。授权后请彻底退出再重新打开。
+            参考 Maccy 等应用：点击「请求授权」触发系统弹窗；若系统设置里已开启但仍显示未授权，说明授权条目与当前程序签名不一致，请按下方步骤处理。
           </p>
           <div className="flex items-center gap-2 flex-wrap">
-            <StatusPill granted={axGranted} />
+            <StatusPill granted={axInfo?.granted ?? null} />
             <button
               type="button"
-              onClick={() => openAccessibilitySettings()}
+              onClick={async () => {
+                await requestAccessibility();
+                refreshAccessibility();
+              }}
+              className="px-3 py-1.5 rounded-full text-[12px] border border-[var(--line)] hover:bg-[var(--paper-deep)] transition-colors"
+            >
+              请求授权
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await openAccessibilitySettings();
+              }}
               className="px-3 py-1.5 rounded-full text-[12px] border border-[var(--line)] hover:bg-[var(--paper-deep)] transition-colors"
             >
               打开辅助功能设置
             </button>
           </div>
+          {axInfo && !axInfo.signingStable && (
+            <p className="mt-3 text-[11px] leading-relaxed text-[var(--t-image-ink)]">
+              当前签名 ID 为「{axInfo.signingId}」，与 Bundle ID 不一致，系统开关可能无效。请用
+              npm run tauri:build 重新打包安装，或在终端执行：
+              codesign --force --deep --sign - --identifier com.wangk.clipboard-history --options
+              runtime /Applications/Paste.app
+              ，然后到辅助功能列表删除 Paste 再重新勾选。
+            </p>
+          )}
+          {axInfo && !axInfo.granted && axInfo.executablePath && (
+            <p
+              className="mt-3 text-[11px] leading-relaxed text-[var(--ink-faint)] break-all font-mono"
+              title={axInfo.executablePath}
+            >
+              当前程序：{axInfo.executablePath}
+            </p>
+          )}
         </Section>
 
         <Section icon={Database} title="数据">
@@ -213,27 +265,6 @@ export function SettingsApp() {
           </div>
         </Section>
       </div>
-
-      <footer className="flex items-center gap-3 px-6 py-4 border-t border-[var(--line)] bg-[var(--paper-soft)]">
-        <span className="text-[11px] text-[var(--ink-faint)] flex-1">
-          {saved ? "已保存 ✓" : "esc 关闭"}
-        </span>
-        <button
-          type="button"
-          onClick={close}
-          className="px-4 py-2 rounded-full text-[13px] text-[var(--ink-soft)] hover:bg-[var(--paper-deep)] transition-colors"
-        >
-          取消
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="px-5 py-2 rounded-full text-[13px] font-medium text-white shadow-[0_4px_12px_rgba(107,159,135,0.35)]"
-          style={{ backgroundColor: "var(--color-accent)" }}
-        >
-          保存
-        </button>
-      </footer>
     </div>
   );
 }
@@ -243,7 +274,7 @@ function Section({
   title,
   children,
 }: {
-  icon: typeof X;
+  icon: LucideIcon;
   title: string;
   children: React.ReactNode;
 }) {

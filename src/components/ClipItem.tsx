@@ -69,8 +69,6 @@ export function ClipItem({
       }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <span className="clip-stamp" />
-
       <div className="relative flex items-center justify-between px-3 pt-3 pb-2 gap-2">
         <span className="type-chip">
           <span className="type-chip-icon">

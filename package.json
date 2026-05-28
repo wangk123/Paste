@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build": "tauri build && bash scripts/sign-macos-app.sh"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.16",

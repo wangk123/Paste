@@ -118,7 +118,10 @@ export function MainApp() {
         <SearchBar />
         <button
           type="button"
-          onClick={() => showSettingsWindow()}
+          onClick={async () => {
+            await hideWindow();
+            await showSettingsWindow();
+          }}
           className="icon-btn shrink-0"
           title="设置"
         >

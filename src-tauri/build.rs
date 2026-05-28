@@ -9,6 +9,8 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn prepare_ocr_resources() {
+    use std::os::unix::fs::PermissionsExt;
+
     let tessdata = Path::new("resources/tessdata");
     std::fs::create_dir_all(tessdata).ok();
 
@@ -23,6 +25,7 @@ fn prepare_ocr_resources() {
             ])
             .status();
     }
+    let _ = std::fs::set_permissions(&chi, std::fs::Permissions::from_mode(0o644));
 
     let bin_dir = Path::new("resources/bin");
     std::fs::create_dir_all(bin_dir).ok();
@@ -34,6 +37,9 @@ fn prepare_ocr_resources() {
                 break;
             }
         }
+    }
+    if dest.exists() {
+        let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755));
     }
 
     println!("cargo:rerun-if-changed=resources/tessdata");

@@ -60,7 +60,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "macOS": {},
+    "macOS": {
+      "hardenedRuntime": true
+    },
     "resources": {
       "resources/": ""
     }

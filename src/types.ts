@@ -34,3 +34,11 @@ export interface AppConfig {
   accentColor: string;
   windowPosition: string;
 }
+
+export interface AccessibilityInfo {
+  granted: boolean;
+  executablePath: string;
+  bundleId: string;
+  signingId: string;
+  signingStable: boolean;
+}

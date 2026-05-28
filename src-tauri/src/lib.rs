@@ -129,6 +129,8 @@ pub fn run() {
             commands::image_ocr,
             focus::open_accessibility_settings,
             focus::is_accessibility_granted,
+            focus::request_accessibility,
+            focus::get_accessibility_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

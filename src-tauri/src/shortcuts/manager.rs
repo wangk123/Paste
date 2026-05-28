@@ -60,13 +60,30 @@ pub fn show_main_window(app: &AppHandle) {
 }
 
 pub fn show_settings_window(app: &AppHandle) {
+    hide_main_window(app);
+
     let Some(window) = app.get_webview_window("settings") else {
         return;
     };
+
+    #[cfg(target_os = "macos")]
+    macos_activate_app();
+
     position_window_on_cursor_monitor(&window, 480.0, 560.0, true);
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
+    let _ = app.emit("settings-shown", ());
+}
+
+#[cfg(target_os = "macos")]
+fn macos_activate_app() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    if let Some(mtm) = MainThreadMarker::new() {
+        NSApplication::sharedApplication(mtm).activate();
+    }
 }
 
 pub fn hide_settings_window(app: &AppHandle) {
