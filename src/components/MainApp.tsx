@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Settings as SettingsIcon, Sparkles } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { CategoryTabs } from "./CategoryTabs";
@@ -79,8 +80,12 @@ export function MainApp() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
-      .onFocusChanged(({ payload: focused }) => {
-        if (!focused) hideWindow();
+      .onFocusChanged(async ({ payload: focused }) => {
+        if (!focused) {
+          const settings = await WebviewWindow.getByLabel("settings");
+          if (settings && (await settings.isVisible())) return;
+          hideWindow();
+        }
       })
       .then((fn) => {
         unlisten = fn;

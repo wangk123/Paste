@@ -12,7 +12,6 @@ import type { AccessibilityInfo, AppConfig } from "../types";
 import {
   getAccessibilityInfo,
   hideSettingsWindow,
-  openAccessibilitySettings,
   requestAccessibility,
   runCleanup,
 } from "../lib/ipc";
@@ -202,37 +201,29 @@ export function SettingsApp() {
 
         <Section icon={ShieldCheck} title="粘贴权限">
           <p className="text-[12px] leading-relaxed text-[var(--ink-soft)] mb-3">
-            参考 Maccy 等应用：点击「请求授权」触发系统弹窗；若系统设置里已开启但仍显示未授权，说明授权条目与当前程序签名不一致，请按下方步骤处理。
+            {axInfo?.granted
+              ? "已具备辅助功能权限，选中历史记录后会自动贴回之前的应用。"
+              : "选中历史记录后会自动贴回之前的应用。请点击「请求授权」，在系统弹窗中允许 Paste。"}
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             <StatusPill granted={axInfo?.granted ?? null} />
-            <button
-              type="button"
-              onClick={async () => {
-                await requestAccessibility();
-                refreshAccessibility();
-              }}
-              className="px-3 py-1.5 rounded-full text-[12px] border border-[var(--line)] hover:bg-[var(--paper-deep)] transition-colors"
-            >
-              请求授权
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                await openAccessibilitySettings();
-              }}
-              className="px-3 py-1.5 rounded-full text-[12px] border border-[var(--line)] hover:bg-[var(--paper-deep)] transition-colors"
-            >
-              打开辅助功能设置
-            </button>
+            {!axInfo?.granted && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await requestAccessibility();
+                  refreshAccessibility();
+                }}
+                className="px-3 py-1.5 rounded-full text-[12px] border border-[var(--line)] hover:bg-[var(--paper-deep)] transition-colors"
+              >
+                请求授权
+              </button>
+            )}
           </div>
-          {axInfo && !axInfo.signingStable && (
+          {axInfo && !axInfo.signingStable && !axInfo.granted && (
             <p className="mt-3 text-[11px] leading-relaxed text-[var(--t-image-ink)]">
-              当前签名 ID 为「{axInfo.signingId}」，与 Bundle ID 不一致，系统开关可能无效。请用
-              npm run tauri:build 重新打包安装，或在终端执行：
-              codesign --force --deep --sign - --identifier com.wangk.clipboard-history --options
-              runtime /Applications/Paste.app
-              ，然后到辅助功能列表删除 Paste 再重新勾选。
+              授权后仍显示未授权时，请重新安装应用，并在「系统设置 → 辅助功能」中删除旧条目后重新勾选
+              Paste。
             </p>
           )}
           {axInfo && !axInfo.granted && axInfo.executablePath && (

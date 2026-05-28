@@ -37,6 +37,9 @@ pub fn update_toggle_shortcut(app: &AppHandle, config: &AppConfig) -> Result<(),
 }
 
 pub fn toggle_main_window(app: &AppHandle) {
+    if settings_is_visible(app) {
+        hide_settings_window(app);
+    }
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
             hide_main_window(app);
@@ -54,9 +57,18 @@ pub fn hide_main_window(app: &AppHandle) {
 }
 
 pub fn show_main_window(app: &AppHandle) {
+    if settings_is_visible(app) {
+        hide_settings_window(app);
+    }
     if let Some(window) = app.get_webview_window("main") {
         show_paste_strip(app, &window);
     }
+}
+
+fn settings_is_visible(app: &AppHandle) -> bool {
+    app.get_webview_window("settings")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false)
 }
 
 pub fn show_settings_window(app: &AppHandle) {
@@ -66,13 +78,27 @@ pub fn show_settings_window(app: &AppHandle) {
         return;
     };
 
+    let _ = window.hide();
+
     #[cfg(target_os = "macos")]
     macos_activate_app();
 
     position_window_on_cursor_monitor(&window, 480.0, 560.0, true);
     let _ = window.unminimize();
+    let _ = window.set_always_on_top(true);
     let _ = window.show();
     let _ = window.set_focus();
+
+    let window_retry = window.clone();
+    let app_retry = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        let _ = app_retry.run_on_main_thread(move || {
+            let _ = window_retry.show();
+            let _ = window_retry.set_focus();
+        });
+    });
+
     let _ = app.emit("settings-shown", ());
 }
 
@@ -184,7 +210,23 @@ pub fn setup_main_window_events(app: &AppHandle) {
     let app_handle = app.clone();
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(false) = event {
+            if settings_is_visible(&app_handle) {
+                return;
+            }
             hide_main_window(&app_handle);
+        }
+    });
+}
+
+pub fn setup_settings_window_events(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("settings") else {
+        return;
+    };
+    let app_handle = app.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            hide_settings_window(&app_handle);
         }
     });
 }

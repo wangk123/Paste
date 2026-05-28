@@ -87,6 +87,7 @@ pub fn run() {
                 start_cleanup_task(db_cleanup);
             });
             shortcuts::manager::setup_main_window_events(&handle);
+            shortcuts::manager::setup_settings_window_events(&handle);
             clipboard::watcher::start_watcher(handle.clone(), db.clone());
 
             // 仅供故障排查：PASTE_AUTO_SHOW=1 时启动 3 秒后自动呼出面板
