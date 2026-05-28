@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useClipStore } from "../stores/clipStore";
 import { formatTime } from "../lib/utils";
+import { getTypeStyle, typeCssVars } from "../lib/clipType";
 
 export function Preview() {
   const show = useClipStore((s) => s.showPreview);
@@ -15,45 +16,78 @@ export function Preview() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md"
           onClick={() => setShowPreview(false)}
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="glass-panel rounded-2xl max-w-lg w-full mx-4 max-h-[70vh] overflow-hidden flex flex-col"
+            initial={{ scale: 0.96, opacity: 0, y: 12 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 12 }}
+            transition={{ type: "spring", stiffness: 360, damping: 30 }}
+            className="glass-panel paper-grain rounded-[22px] max-w-xl w-full mx-4 max-h-[72vh] overflow-hidden flex flex-col shadow-[var(--shadow-lift)]"
             onClick={(e) => e.stopPropagation()}
+            style={typeCssVars(clip.type)}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
-              <div>
-                <p className="text-sm font-medium capitalize">{clip.type}</p>
-                <p className="text-xs text-[var(--text-secondary)]">{formatTime(clip.createdAt)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-4 overflow-auto flex-1">
-              <pre className="text-sm whitespace-pre-wrap break-words font-mono leading-relaxed">
+            <PreviewHeader
+              clip={clip}
+              onClose={() => setShowPreview(false)}
+            />
+            <div className="p-5 overflow-auto flex-1 bg-[var(--type-soft)]/40">
+              <pre className="text-[13px] whitespace-pre-wrap break-words font-mono leading-[1.7] text-[var(--ink)]/95">
                 {clip.type === "image"
                   ? "[图片内容]"
                   : clip.content.length > 20000
-                  ? clip.content.slice(0, 20000) + "\n\n…（已截断，共 " + clip.content.length + " 字符）"
-                  : clip.content}
+                    ? clip.content.slice(0, 20000) +
+                      `\n\n…（已截断，共 ${clip.content.length} 字符）`
+                    : clip.content}
               </pre>
             </div>
-            <div className="px-4 py-2 border-t border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] flex gap-4">
-              <span>{clip.content.length} 字符</span>
-              {clip.sourceApp && <span>来源: {clip.sourceApp}</span>}
+            <div className="px-5 py-2.5 border-t border-[var(--line)] text-[11px] text-[var(--ink-faint)] flex gap-4 font-mono">
+              <span>{clip.content.length} chars</span>
+              {clip.sourceApp && <span>↳ {clip.sourceApp}</span>}
             </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+function PreviewHeader({
+  clip,
+  onClose,
+}: {
+  clip: NonNullable<ReturnType<typeof useClipStore.getState>["previewClip"]>;
+  onClose: () => void;
+}) {
+  const style = getTypeStyle(clip.type);
+  const Icon = style.icon;
+  return (
+    <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--line)]">
+      <div className="flex items-center gap-3">
+        <span className="type-emblem !w-10 !h-10 !rounded-xl">
+          <Icon className="w-4 h-4" strokeWidth={1.8} />
+        </span>
+        <div>
+          <p
+            className="text-[15px] leading-tight text-[var(--ink)]"
+            style={{
+              fontFamily: "var(--font-display)",
+              fontStyle: "italic",
+              fontWeight: 500,
+            }}
+          >
+            {style.label}
+            {clip.language ? ` · ${clip.language}` : ""}
+          </p>
+          <p className="text-[11px] text-[var(--ink-faint)] font-mono mt-0.5">
+            {formatTime(clip.createdAt)}
+          </p>
+        </div>
+      </div>
+      <button type="button" onClick={onClose} className="icon-btn">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
   );
 }

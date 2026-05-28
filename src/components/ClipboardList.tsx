@@ -67,7 +67,10 @@ export function ClipboardList() {
   }
 
   return (
-    <div ref={parentRef} className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-2">
+    <div
+      ref={parentRef}
+      className="flex-1 overflow-x-auto overflow-y-hidden px-5 pb-3"
+    >
       <div
         style={{
           width: virtualizer.getTotalSize(),
@@ -77,6 +80,7 @@ export function ClipboardList() {
       >
         {virtualizer.getVirtualItems().map((item) => {
           const clip = clips[item.index];
+          const delay = Math.min(item.index, 8) * 0.025;
           return (
             <div
               key={clip.id}
@@ -85,6 +89,7 @@ export function ClipboardList() {
                 top: 8,
                 left: item.start,
                 width: 240,
+                animation: `card-in 380ms cubic-bezier(0.32, 0.72, 0, 1) ${delay}s both`,
               }}
             >
               <ClipContextMenu clip={clip}>
@@ -105,6 +110,12 @@ export function ClipboardList() {
           );
         })}
       </div>
+      <style>{`
+        @keyframes card-in {
+          from { opacity: 0; transform: translateY(12px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

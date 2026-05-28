@@ -21,12 +21,23 @@ function formatShortcut(e: KeyboardEvent): string | null {
   return parts.join("+");
 }
 
+function prettify(s: string): string {
+  return s
+    .replace("CommandOrControl", "⌘")
+    .replace("Alt", "⌥")
+    .replace("Shift", "⇧")
+    .replace("Control", "⌃")
+    .split("+")
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function KeyRecorder({ value, onChange }: KeyRecorderProps) {
   const [recording, setRecording] = useState(false);
-  const [display, setDisplay] = useState(value);
+  const [display, setDisplay] = useState(prettify(value));
 
   useEffect(() => {
-    setDisplay(value.replace("CommandOrControl", "⌘/Ctrl"));
+    setDisplay(prettify(value));
   }, [value]);
 
   useEffect(() => {
@@ -37,7 +48,7 @@ export function KeyRecorder({ value, onChange }: KeyRecorderProps) {
       const shortcut = formatShortcut(e);
       if (shortcut) {
         onChange(shortcut);
-        setDisplay(shortcut.replace("CommandOrControl", "⌘/Ctrl"));
+        setDisplay(prettify(shortcut));
         setRecording(false);
       }
     };
@@ -50,10 +61,10 @@ export function KeyRecorder({ value, onChange }: KeyRecorderProps) {
       type="button"
       onClick={() => setRecording(true)}
       className={cn(
-        "px-3 py-2 rounded-lg text-sm font-mono border min-w-[160px] text-left",
+        "px-3 py-1.5 rounded-full text-[12px] font-mono min-w-[140px] text-center transition-all",
         recording
-          ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/30"
-          : "border-[var(--border-subtle)] hover:bg-black/5 dark:hover:bg-white/5",
+          ? "bg-[var(--color-accent)]/12 border border-[var(--color-accent)]/50 text-[var(--color-accent)] animate-pulse"
+          : "bg-[var(--paper-deep)] border border-[var(--line)] hover:border-[var(--line-strong)]",
       )}
     >
       {recording ? "按下快捷键…" : display || "点击录制"}

@@ -1,29 +1,110 @@
 @import "tailwindcss";
 
+/* ============================================================
+   纸森 · Paper Forest
+   小清新日系手账风：暖米白纸面 + 莫兰迪低饱和 + 薄荷青强调
+   零外部字体依赖，全部使用系统字体栈。
+   ============================================================ */
+
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable",
-    "Segoe UI", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
-  --color-accent: #6366f1;
-  --radius-card: 16px;
+  --font-display: ui-serif, "Iowan Old Style", "Apple Garamond", "Songti SC",
+    "STSong", Georgia, serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Rounded",
+    "SF Pro Text", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+  --color-accent: #6b9f87;
+  --color-accent-soft: #b8d4c5;
+
+  --radius-card: 22px;
+  --radius-pill: 9999px;
 }
 
 :root {
-  --bg-glass: rgba(255, 255, 255, 0.72);
-  --bg-panel: rgba(255, 255, 255, 0.88);
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+  /* paper · 主纸面与墨色 */
+  --paper: #faf6ee;
+  --paper-deep: #f3ebda;
+  --paper-soft: #fdfaf3;
+  --ink: #2c2823;
+  --ink-soft: #6f6557;
+  --ink-faint: #a89e8a;
+  --line: rgba(60, 50, 30, 0.08);
+  --line-strong: rgba(60, 50, 30, 0.14);
+  --shadow-paper: 0 1px 2px rgba(40, 30, 10, 0.04),
+    0 8px 24px rgba(40, 30, 10, 0.06);
+  --shadow-lift: 0 4px 12px rgba(40, 30, 10, 0.08),
+    0 18px 40px rgba(40, 30, 10, 0.1);
+
+  /* 类型色板 · light */
+  --t-text-bg: #f1e7d1;
+  --t-text-bg-soft: #faf3e2;
+  --t-text-ink: #8a6e3d;
+
+  --t-code-bg: #d4e7d9;
+  --t-code-bg-soft: #ebf3ed;
+  --t-code-ink: #4a8366;
+
+  --t-markdown-bg: #d8e5f0;
+  --t-markdown-bg-soft: #ebf1f7;
+  --t-markdown-ink: #4c7ba0;
+
+  --t-image-bg: #f1d3da;
+  --t-image-bg-soft: #f9e6eb;
+  --t-image-ink: #b0556a;
+
+  --t-file-bg: #e8d4ba;
+  --t-file-bg-soft: #f3e7d2;
+  --t-file-ink: #966c47;
+
+  /* 兼容旧变量名 */
+  --bg-glass: rgba(250, 246, 238, 0.78);
+  --bg-panel: var(--paper);
+  --border-subtle: var(--line);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --shadow-card: var(--shadow-paper);
 }
 
 .dark {
-  --bg-glass: rgba(24, 24, 27, 0.78);
-  --bg-panel: rgba(24, 24, 27, 0.92);
-  --border-subtle: rgba(255, 255, 255, 0.1);
-  --text-primary: #f9fafb;
-  --text-secondary: #9ca3af;
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --paper: #1d1b18;
+  --paper-deep: #16140f;
+  --paper-soft: #232019;
+  --ink: #f0e8d4;
+  --ink-soft: #a59c89;
+  --ink-faint: #6c6451;
+  --line: rgba(240, 232, 212, 0.08);
+  --line-strong: rgba(240, 232, 212, 0.14);
+  --shadow-paper: 0 1px 2px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lift: 0 4px 12px rgba(0, 0, 0, 0.4),
+    0 18px 40px rgba(0, 0, 0, 0.5);
+
+  --t-text-bg: rgba(225, 200, 150, 0.16);
+  --t-text-bg-soft: rgba(225, 200, 150, 0.08);
+  --t-text-ink: #d8bd87;
+
+  --t-code-bg: rgba(160, 210, 180, 0.18);
+  --t-code-bg-soft: rgba(160, 210, 180, 0.08);
+  --t-code-ink: #95cba9;
+
+  --t-markdown-bg: rgba(160, 195, 230, 0.18);
+  --t-markdown-bg-soft: rgba(160, 195, 230, 0.08);
+  --t-markdown-ink: #98beda;
+
+  --t-image-bg: rgba(230, 165, 185, 0.18);
+  --t-image-bg-soft: rgba(230, 165, 185, 0.08);
+  --t-image-ink: #d997a8;
+
+  --t-file-bg: rgba(220, 185, 145, 0.18);
+  --t-file-bg-soft: rgba(220, 185, 145, 0.08);
+  --t-file-ink: #cba47a;
+
+  --bg-glass: rgba(29, 27, 24, 0.82);
+  --bg-panel: var(--paper);
+  --border-subtle: var(--line);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --shadow-card: var(--shadow-paper);
 }
 
 * {
@@ -37,40 +118,229 @@ body,
   height: 100%;
   overflow: hidden;
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   background: transparent;
-  color: var(--text-primary);
+  color: var(--ink);
 }
+
+/* ---------- 通用·主面板（毛玻璃 + 纸张噪点） ---------- */
 
 .glass-panel {
   background: var(--bg-glass);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(42px) saturate(170%);
+  -webkit-backdrop-filter: blur(42px) saturate(170%);
+  border: 1px solid var(--line);
+  position: relative;
 }
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: radial-gradient(
+      circle at 20% 30%,
+      rgba(120, 110, 90, 0.04) 0,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 80% 70%,
+      rgba(120, 110, 90, 0.035) 0,
+      transparent 45%
+    );
+  opacity: 1;
+  mix-blend-mode: multiply;
+}
+
+/* 纸纹（极淡的噪点） */
+.paper-grain {
+  position: relative;
+}
+.paper-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18  0 0 0 0 0.14  0 0 0 0 0.08  0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 160px 160px;
+  mix-blend-mode: multiply;
+}
+.dark .paper-grain::after {
+  opacity: 0.35;
+  mix-blend-mode: screen;
+}
+
+/* ---------- 剪贴卡片 ---------- */
 
 .clip-card {
   width: 240px;
   height: 320px;
   border-radius: var(--radius-card);
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-card);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-paper);
+  transition: box-shadow 200ms ease, transform 200ms ease,
+    border-color 200ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.clip-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle at 100% 0%,
+    var(--type-tint, transparent) 0%,
+    transparent 55%
+  );
+  opacity: 0.55;
+  transition: opacity 200ms ease;
+}
+
+.clip-card:hover {
+  box-shadow: var(--shadow-lift);
+  border-color: var(--line-strong);
+}
+.clip-card:hover::before {
+  opacity: 0.8;
 }
 
 .clip-card.selected {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 40%, transparent),
-    var(--shadow-card);
+  border-color: var(--type-ink, var(--color-accent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--type-ink, var(--color-accent)) 30%, transparent),
+    var(--shadow-lift);
 }
+.clip-card.selected::before {
+  opacity: 1;
+}
+
+/* 卡片左上角"水彩印章"装饰 */
+.clip-stamp {
+  position: absolute;
+  top: -18px;
+  left: -18px;
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  background: var(--type-bg, transparent);
+  filter: blur(8px);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ---------- 类型 chip ---------- */
+
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 9999px;
+  background: var(--type-bg, var(--paper-deep));
+  color: var(--type-ink, var(--ink-soft));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-feature-settings: "tnum";
+  line-height: 1;
+}
+
+.type-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--paper-soft);
+  color: var(--type-ink, var(--ink-soft));
+}
+
+/* 类型徽章·更大（图片/文件占位） */
+.type-emblem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--type-bg, var(--paper-deep));
+  color: var(--type-ink, var(--ink-soft));
+}
+
+/* ---------- 按钮通用 ---------- */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 10px;
+  color: var(--ink-soft);
+  transition: background-color 140ms ease, color 140ms ease,
+    transform 140ms ease;
+}
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+/* ---------- 心形收藏点击爆裂 ---------- */
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.4) rotate(-8deg);
+  }
+  60% {
+    transform: scale(0.9) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+.heart-pop {
+  animation: heart-pop 480ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------- 滚动条 ---------- */
 
 ::-webkit-scrollbar {
   height: 6px;
+  width: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.4);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ink) 30%, transparent);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- 选中文本 ---------- */
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  color: var(--ink);
 }

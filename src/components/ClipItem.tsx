@@ -1,18 +1,11 @@
 import { motion } from "framer-motion";
-import { Code2, Eye, FileText, Heart, Image, ScanText, Send, Type } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Eye, Heart, ScanText, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { Clip } from "../types";
 import { readImageBase64 } from "../lib/ipc";
 import { cn, formatTime } from "../lib/utils";
 import { cardSpring } from "../lib/animations";
-
-const typeIcons = {
-  text: Type,
-  image: Image,
-  code: Code2,
-  markdown: FileText,
-  file: FileText,
-};
+import { getTypeStyle, typeCssVars } from "../lib/clipType";
 
 interface ClipItemProps {
   clip: Clip;
@@ -36,7 +29,9 @@ export function ClipItem({
   onOcr,
 }: ClipItemProps) {
   const [thumb, setThumb] = useState<string | null>(null);
-  const Icon = typeIcons[clip.type] ?? Type;
+  const heartRef = useRef<HTMLSpanElement>(null);
+  const style = getTypeStyle(clip.type);
+  const Icon = style.icon;
 
   useEffect(() => {
     if (clip.type !== "image") return;
@@ -46,11 +41,25 @@ export function ClipItem({
       .catch(() => {});
   }, [clip]);
 
+  const triggerPin = () => {
+    onPin();
+    const el = heartRef.current;
+    if (el) {
+      el.classList.remove("heart-pop");
+      void el.offsetWidth;
+      el.classList.add("heart-pop");
+    }
+  };
+
   return (
     <motion.div
       layout
-      className={cn("clip-card flex-shrink-0 flex flex-col cursor-pointer select-none", selected && "selected")}
-      animate={{ scale: selected ? 1.02 : 1, y: selected ? -4 : 0 }}
+      className={cn(
+        "clip-card flex-shrink-0 flex flex-col cursor-pointer select-none",
+        selected && "selected",
+      )}
+      style={typeCssVars(clip.type)}
+      animate={{ scale: selected ? 1.02 : 1, y: selected ? -6 : 0 }}
       transition={cardSpring}
       onClick={onSelect}
       onDoubleClick={(e) => {
@@ -58,18 +67,24 @@ export function ClipItem({
         e.stopPropagation();
         onPaste();
       }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-      }}
+      onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="flex items-center justify-between px-3 pt-3 pb-2">
-        <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-          <Icon className="w-3.5 h-3.5" />
+      <span className="clip-stamp" />
+
+      <div className="relative flex items-center justify-between px-3 pt-3 pb-2 gap-2">
+        <span className="type-chip">
+          <span className="type-chip-icon">
+            <Icon className="w-3 h-3" strokeWidth={2.2} />
+          </span>
+          <span>{style.label}</span>
           {clip.language && (
-            <span className="text-[10px] uppercase font-mono">{clip.language}</span>
+            <span className="font-mono text-[10px] opacity-70 normal-case">
+              · {clip.language}
+            </span>
           )}
-        </div>
-        <div className="flex items-center gap-1">
+        </span>
+
+        <div className="flex items-center gap-0.5">
           {clip.type === "image" && (
             <button
               type="button"
@@ -77,77 +92,116 @@ export function ClipItem({
                 e.stopPropagation();
                 onOcr();
               }}
-              className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-              title="OCR"
+              className="icon-btn"
+              title="文字识别"
             >
-              <ScanText className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
+              <ScanText className="w-3.5 h-3.5" strokeWidth={1.8} />
             </button>
           )}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onPin();
+              triggerPin();
             }}
-            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-            title="收藏"
+            className="icon-btn"
+            title={clip.pinned ? "取消收藏" : "收藏"}
           >
-            <Heart
-              className={cn(
-                "w-3.5 h-3.5",
-                clip.pinned
-                  ? "fill-red-500 text-red-500"
-                  : "text-[var(--text-secondary)]",
-              )}
-            />
+            <span ref={heartRef} className="inline-flex">
+              <Heart
+                className={cn(
+                  "w-3.5 h-3.5 transition-colors",
+                  clip.pinned
+                    ? "fill-[#e36a7a] text-[#e36a7a]"
+                    : "text-[var(--ink-faint)]",
+                )}
+                strokeWidth={1.8}
+              />
+            </span>
           </button>
-          <span className="text-[10px] text-[var(--text-secondary)]">{index + 1}</span>
+          <span className="ml-0.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-mono text-[var(--ink-faint)]">
+            {index + 1}
+          </span>
         </div>
       </div>
 
-      <div className="flex-1 mx-3 mb-2 rounded-lg overflow-hidden bg-black/5 dark:bg-white/5 p-2">
-        {clip.type === "image" && thumb ? (
-          <img src={thumb} alt="" className="w-full h-full object-cover rounded-md" />
+      <div className="relative flex-1 mx-3 mb-2 rounded-[14px] overflow-hidden bg-[var(--type-soft)] border border-[var(--line)]/40">
+        {clip.type === "image" ? (
+          thumb ? (
+            <img
+              src={thumb}
+              alt=""
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <span className="type-emblem">
+                <Icon className="w-6 h-6" strokeWidth={1.6} />
+              </span>
+            </div>
+          )
         ) : clip.type === "file" ? (
-          <div className="flex flex-col gap-1 justify-center h-full">
-            <FileText className="w-8 h-8 mx-auto text-[var(--text-secondary)] opacity-70" />
-            <p className="text-xs text-center line-clamp-3 break-all">{clip.preview}</p>
+          <div className="flex flex-col items-center justify-center h-full gap-3 p-3">
+            <span className="type-emblem">
+              <Icon className="w-7 h-7" strokeWidth={1.5} />
+            </span>
+            <p
+              className="text-[11px] text-center leading-snug break-all text-[var(--ink-soft)] line-clamp-3"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              {clip.preview}
+            </p>
           </div>
         ) : clip.type === "code" ? (
-          <pre className="text-[11px] font-mono leading-relaxed overflow-hidden line-clamp-[12] opacity-90">
+          <pre
+            className="text-[11px] font-mono leading-relaxed p-3 overflow-hidden line-clamp-[14] text-[var(--ink)]/85"
+            style={{ tabSize: 2 }}
+          >
             {clip.preview}
           </pre>
+        ) : clip.type === "markdown" ? (
+          <div className="p-3 overflow-hidden">
+            <p className="text-xs leading-relaxed line-clamp-[14] break-words whitespace-pre-wrap font-[var(--font-display)] text-[var(--ink)]/90">
+              {clip.preview}
+            </p>
+          </div>
         ) : (
-          <p className="text-xs leading-relaxed line-clamp-[14] break-words whitespace-pre-wrap">
-            {clip.preview}
-          </p>
+          <div className="p-3 overflow-hidden">
+            <p className="text-xs leading-[1.65] line-clamp-[14] break-words whitespace-pre-wrap text-[var(--ink)]/90">
+              {clip.preview}
+            </p>
+          </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between px-3 pb-3 pt-1 border-t border-[var(--border-subtle)]">
-        <span className="text-[10px] text-[var(--text-secondary)]">{formatTime(clip.createdAt)}</span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPaste();
-            }}
-            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-            title="粘贴"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
+      <div className="relative flex items-center justify-between px-3 pb-2.5 pt-1.5">
+        <span className="text-[10px] tracking-wide text-[var(--ink-faint)] font-mono">
+          {formatTime(clip.createdAt)}
+        </span>
+        <div className="flex gap-0.5">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onPreview();
             }}
-            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10"
-            title="预览 (空格)"
+            className="icon-btn"
+            title="预览（空格）"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-3.5 h-3.5" strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPaste();
+            }}
+            className="icon-btn"
+            style={{ color: "var(--type-ink)" }}
+            title="粘贴（双击）"
+          >
+            <Send className="w-3.5 h-3.5" strokeWidth={1.8} />
           </button>
         </div>
       </div>

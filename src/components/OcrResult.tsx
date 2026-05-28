@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { ScanText, X } from "lucide-react";
 import { useClipStore } from "../stores/clipStore";
 
 export function OcrResult() {
@@ -15,31 +15,58 @@ export function OcrResult() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md"
           onClick={close}
         >
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="glass-panel rounded-2xl max-w-2xl w-full mx-4 max-h-[75vh] overflow-hidden flex flex-col"
+            initial={{ scale: 0.96, opacity: 0, y: 12 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 12 }}
+            transition={{ type: "spring", stiffness: 360, damping: 30 }}
+            className="glass-panel paper-grain rounded-[22px] max-w-2xl w-full mx-4 max-h-[78vh] overflow-hidden flex flex-col shadow-[var(--shadow-lift)]"
             onClick={(e) => e.stopPropagation()}
+            style={
+              {
+                "--type-soft": "var(--t-image-bg-soft)",
+                "--type-ink": "var(--t-image-ink)",
+              } as React.CSSProperties
+            }
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)]">
-              <p className="text-sm font-medium">OCR 识别结果</p>
-              <button
-                type="button"
-                onClick={close}
-                className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10"
-              >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--line)]">
+              <div className="flex items-center gap-3">
+                <span className="type-emblem !w-10 !h-10 !rounded-xl !bg-[var(--t-image-bg)] !text-[var(--t-image-ink)]">
+                  <ScanText className="w-4 h-4" strokeWidth={1.8} />
+                </span>
+                <div>
+                  <p
+                    className="text-[15px] leading-tight"
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontStyle: "italic",
+                      fontWeight: 500,
+                    }}
+                  >
+                    文字识别
+                  </p>
+                  <p className="text-[11px] text-[var(--ink-faint)] mt-0.5">
+                    {loading ? "正在识别图片中的文字…" : "识别完成"}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={close} className="icon-btn">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-4 overflow-auto flex-1">
+            <div className="p-5 overflow-auto flex-1 bg-[var(--t-image-bg-soft)]/40">
               {loading ? (
-                <p className="text-sm text-[var(--text-secondary)]">识别中...</p>
+                <div className="flex items-center gap-3 text-sm text-[var(--ink-soft)]">
+                  <span className="w-2 h-2 rounded-full bg-[var(--t-image-ink)] animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-[var(--t-image-ink)] animate-pulse [animation-delay:120ms]" />
+                  <span className="w-2 h-2 rounded-full bg-[var(--t-image-ink)] animate-pulse [animation-delay:240ms]" />
+                  <span className="ml-2">识别中…</span>
+                </div>
               ) : (
-                <pre className="text-sm whitespace-pre-wrap break-words font-mono leading-relaxed">
+                <pre className="text-[13px] whitespace-pre-wrap break-words font-mono leading-[1.75] text-[var(--ink)]/95">
                   {text || "未识别到文字"}
                 </pre>
               )}
