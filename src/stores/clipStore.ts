@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import type { Category, Clip } from "../types";
 import * as ipc from "../lib/ipc";
+import { fuzzyFilter } from "../lib/fuzzy";
 import { useToast } from "../components/Toast";
+
+const SEARCH_POOL_LIMIT = 800;
 
 interface ClipStore {
   clips: Clip[];
@@ -90,9 +93,12 @@ export const useClipStore = create<ClipStore>((set, get) => ({
     set({ loading: true });
     try {
       const { searchQuery, categoryId } = get();
-      const clips = searchQuery.trim()
-        ? await ipc.searchClips(searchQuery)
-        : await ipc.listClips({ categoryId });
+      const query = searchQuery.trim();
+      const pool = await ipc.listClips({
+        categoryId,
+        limit: query ? SEARCH_POOL_LIMIT : 50,
+      });
+      const clips = query ? fuzzyFilter(pool, query) : pool;
       const stats = await ipc.getStats();
       set({
         clips,
