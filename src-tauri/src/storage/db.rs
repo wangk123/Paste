@@ -474,7 +474,7 @@ pub fn save_image_with_thumbnail(data: &[u8]) -> Result<(String, String), String
     let img = image::load_from_memory(data).map_err(|e| e.to_string())?;
     img.save(&original_path).map_err(|e| e.to_string())?;
 
-    let thumb = img.thumbnail(128, 128);
+    let thumb = img.resize(128, 128, image::imageops::FilterType::Lanczos3);
     thumb.save(&thumb_path).map_err(|e| e.to_string())?;
 
     Ok((

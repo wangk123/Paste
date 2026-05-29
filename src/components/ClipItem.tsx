@@ -29,6 +29,9 @@ export function ClipItem({
   onOcr,
 }: ClipItemProps) {
   const [thumb, setThumb] = useState<string | null>(null);
+  const thumbDisplayPx = Math.round(
+    128 / (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1),
+  );
   const heartRef = useRef<HTMLSpanElement>(null);
   const style = getTypeStyle(clip.type);
   const Icon = style.icon;
@@ -123,13 +126,17 @@ export function ClipItem({
         </div>
       </div>
 
-      <div className="relative flex-1 mx-3 mb-2 rounded-[14px] overflow-hidden bg-[var(--type-soft)] border border-[var(--line)]/40">
+      <div className="relative flex-1 mx-3 mb-2 rounded-[14px] overflow-hidden bg-[var(--type-soft)] border border-[var(--line)]/40 flex items-center justify-center">
         {clip.type === "image" ? (
           thumb ? (
             <img
               src={thumb}
               alt=""
-              className="w-full h-full object-cover"
+              style={{
+                maxWidth: thumbDisplayPx,
+                maxHeight: thumbDisplayPx,
+              }}
+              className="w-auto h-auto object-contain"
               draggable={false}
             />
           ) : (
