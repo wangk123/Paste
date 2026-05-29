@@ -2,129 +2,147 @@
 
 跨平台剪贴板历史工具 · macOS / Windows · 基于 Tauri 2 + React 19 + Rust。
 
-一个安静地呆在背后、按 `⌘⇧V` 就出现的剪贴板。纸森小清新外观，零联网依赖，本地优先。
+按 `⌘⇧V` 在光标所在屏幕底部唤出横向历史条。纸森小清新外观，数据本地存储，零联网依赖。
 
 ---
 
-## ✨ 项目优点
+## 功能概览
 
-### 1. 真正不卡死的稳定性
-- **Rust 后端**：内存安全，无 GC 停顿
-- **修复了 `std::sync::Mutex` 重入死锁**：数据库锁严格作用域化，永不阻塞 UI
-- **所有阻塞操作（OCR / 系统注入 / 子进程）走 `spawn_blocking`**，主线程永远响应
-- **零 Electron**：Tauri 用系统 WebView，安装包 < 10 MB，内存占用 < 80 MB
+### 剪贴板与类型识别
 
-### 2. 类型语义化的剪贴板
-- 5 种内容类型自动识别：**文本 / 代码 / Markdown / 图片 / 文件**
-- 文件走原生 `NSPasteboard` 文件 URL，**粘贴出来是真文件，不是路径文本**
-- 每种类型有专属色板与图标（米黄 / 薄荷 / 淡蓝 / 樱花 / 砂米）
-- 代码自动检测语言，Markdown 单独分类
+- 自动识别 **文本 / 代码 / Markdown / 图片 / 文件**
+- 文件走原生剪贴板，粘贴为真实文件而非路径字符串
+- 按类型筛选；列表缩略图按屏幕 DPR 1:1 显示，清晰不拉伸
 
-### 3. 模糊搜索（Fuse.js）
-- **任意子字符匹配**：`ru` 能搜到 `npm run tauri build`
-- **散字符子序列**：`nrt` 也能匹配
-- **多 token AND**：`npm tau` 同时命中
-- 按匹配度自动排序
-- 中文友好，离线本地计算 < 5 ms
+### 分组（替代原「收藏」）
 
-### 4. 本地 OCR（中文支持）
-- 集成 **Tesseract + `chi_sim`** 语言包
-- 完全离线，不上传图片
-- 一键识别图片文字
-- 构建脚本自动准备依赖，开箱即用
+- 支持分组 **增删改查**（名称必填、描述可选）
+- 筛选栏「分组」下拉中管理分组，右键或卡片上快速 **加入 / 修改 / 移出** 分组
+- **已分组条目永不自动清理**，未分组仍按设置过期删除
+- 每条记录仅属于一个分组；无分组则不显示标签
 
-### 5. 多屏 / 焦点智能恢复
-- 面板**在光标所在的显示器**弹出，不再固定主屏
-- 唤起前记录前台应用，选择后**自动切回原应用再粘贴**
-- 鼠标移出 / 失焦自动关闭，无需手动 ESC
-- 双击条目直接粘贴
+### 搜索
 
-### 6. 纸森 · 小清新 UI
-- 暖米白纸面 + 莫兰迪低饱和色板 + 薄荷青强调
-- 衬线斜体 + 系统圆体字体，零外部字体依赖
-- SVG 噪点纸纹、水彩晕染、心形爆裂动效
-- 卡片错位入场、弹簧选中上浮
-- 浅色 / 深色双主题
+- Fuse.js 模糊搜索：子串、散列子序列、多 token AND
+- SQLite FTS5 与本地 Fuse 配合，中文友好，离线计算
 
-### 7. 性能与体积
-- 横向虚拟滚动（`@tanstack/react-virtual`），上万条记录仍流畅
-- SQLite + FTS5 后端 + WAL 模式
-- 启动 < 500 ms，呼出 < 50 ms
+### 图片预览（独立窗口）
 
-### 8. 隐私优先
-- **所有数据仅存本地 SQLite**，永不上云
-- 无遥测、无埋点、无网络请求
-- 开源 MIT 协议
+- 按 `␣` 或预览按钮打开 **独立预览窗口**（非主面板内嵌）
+- 按原图尺寸显示，超出屏幕时等比缩小
+- 预览内 `↵` 粘贴、`⇧↵` 纯文本粘贴，并 **置顶到历史首位**
+- `esc` 关闭预览
+
+### 多屏与粘贴
+
+- 主面板、设置、预览均在 **当前鼠标所在显示器** 定位
+- 主面板宽度 **贴近该屏可用宽度**，高度随内容自适应（不可拖拽缩放）
+- 唤起前记录前台应用，粘贴时写剪贴板并尝试 `⌘V` 回到原应用
+- 未授予 macOS「辅助功能」时仍可复制到系统剪贴板，但不会自动注入按键
+
+### OCR
+
+- Tesseract + `chi_sim`，完全离线识别图片文字
+
+### UI
+
+- 暖米白纸面、莫兰迪色、薄荷青强调；浅/深色主题
+- 横向虚拟滚动，大量历史仍流畅
+
+### 隐私
+
+- 数据仅存本地 SQLite，无遥测、无上传
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ```bash
 npm install
-npm run tauri dev      # 开发模式（热更新）
-npm run tauri build    # 生产打包
+npm run tauri dev          # 开发（热更新）
+npm run tauri:build        # 生产打包（macOS：签名 + DMG）
 ```
 
-构建产物：
-- macOS: `src-tauri/target/release/bundle/dmg/`
-- Windows: `src-tauri/target/release/bundle/msi/`
+仅构建 `.app`、不打 DMG：
+
+```bash
+npm run tauri build -- --bundles app
+```
+
+### 构建产物
+
+| 平台 | 路径 |
+|------|------|
+| macOS 应用 | `src-tauri/target/release/bundle/macos/Paste.app` |
+| macOS 安装包 | `src-tauri/target/release/bundle/dmg/Paste_0.1.0_aarch64.dmg` |
+| Windows | `src-tauri/target/release/bundle/msi/` |
+
+macOS DMG 由 `scripts/bundle-dmg-simple.sh`（`hdiutil`）生成，避免部分系统上 Tauri 自带 `bundle_dmg.sh` 因 Finder 脚本失败。
 
 ---
 
-## ⌨️ 快捷键
+## 快捷键
+
+### 主面板
 
 | 键 | 作用 |
-|---|---|
-| `⌘⇧V` | 唤出 / 隐藏面板（可自定义） |
-| `← →` | 切换条目 |
+|----|------|
+| `⌘⇧V` | 唤出 / 隐藏（可在设置中修改） |
+| `←` `→` | 切换条目 |
 | `↵` | 粘贴到原应用 |
-| `1–9` | 速贴对应位置 |
-| `␣` | 预览 |
-| `⌘F` | 聚焦搜索框 |
+| `⇧↵` | 纯文本粘贴 |
+| `⌘1`–`⌘9` | 快速粘贴第 1–9 条 |
+| `␣` | 预览（图片为独立窗口，其他为文本预览） |
+| `⌘F` | 聚焦搜索 |
 | `esc` | 关闭面板 |
 
 双击条目 = 直接粘贴。
 
+### 图片预览窗口
+
+| 键 | 作用 |
+|----|------|
+| `↵` | 粘贴 |
+| `⇧↵` | 纯文本粘贴 |
+| `esc` | 关闭 |
+
 ---
 
-## 🛠 技术栈
+## 技术栈
 
 | 层 | 技术 |
-|---|---|
-| 框架 | Tauri 2 · macOSPrivateApi · 透明窗口 |
-| 后端 | Rust · rusqlite (FTS5 + WAL) · objc2 · CGEvent |
+|----|------|
+| 框架 | Tauri 2 · 多窗口（main / settings / preview） |
+| 后端 | Rust · rusqlite (FTS5 + WAL) · arboard · CGEvent |
 | 前端 | React 19 · TypeScript · Tailwind v4 · Zustand · Framer Motion |
-| 搜索 | Fuse.js（多 token + 子序列 fuzzy） |
+| 搜索 | Fuse.js |
 | OCR | Tesseract + chi_sim |
-| 虚拟化 | @tanstack/react-virtual |
-| UI 原语 | Radix UI · Lucide Icons |
+| 列表 | @tanstack/react-virtual |
+| UI | Radix UI · Lucide |
 
 ---
 
-## 📁 数据目录
+## 数据目录
 
 | OS | 路径 |
-|---|---|
+|----|------|
 | macOS | `~/Library/Application Support/com.wangk.clipboard-history/` |
 | Windows | `%APPDATA%/com.wangk.clipboard-history/` |
 
-包含 SQLite 数据库、图片缓存、配置文件。卸载后可手动清理。
+含 SQLite、图片缓存、配置。卸载后可手动删除该目录。
 
 ---
 
-## 🔐 权限说明（macOS）
+## macOS 权限
 
-首次粘贴到前台应用需授予「辅助功能」权限：
+粘贴到前台应用需 **辅助功能**：
 
-```
-系统设置 → 隐私与安全性 → 辅助功能 → 勾选 Paste
-```
+**系统设置 → 隐私与安全性 → 辅助功能 → 勾选 Paste**
 
-授权后请彻底退出并重新打开。未授权时仍可使用，但选中条目仅写入剪贴板，不会自动粘贴。
+修改权限后请完全退出并重新打开应用。未授权时选中条目仍会写入系统剪贴板，需手动 `⌘V`。
 
 ---
 
-## 📝 License
+## License
 
 MIT
