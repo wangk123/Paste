@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Category, Clip } from "../types";
+import type { Category, Clip, Group } from "../types";
 import * as ipc from "../lib/ipc";
 import { fuzzyFilter } from "../lib/fuzzy";
 import { useToast } from "../components/Toast";
@@ -9,6 +9,7 @@ const SEARCH_POOL_LIMIT = 800;
 interface ClipStore {
   clips: Clip[];
   categories: Category[];
+  groups: Group[];
   selectedId: string | null;
   selectedIndex: number;
   categoryId: string;
@@ -29,8 +30,9 @@ interface ClipStore {
   closeOcr: () => void;
   load: () => Promise<void>;
   loadCategories: () => Promise<void>;
+  loadGroups: () => Promise<void>;
   refresh: () => Promise<void>;
-  pin: (id: string, pinned: boolean) => Promise<void>;
+  setClipGroup: (id: string, groupId: string | null) => Promise<void>;
   remove: (id: string) => Promise<void>;
   paste: (id: string) => Promise<void>;
 }
@@ -38,6 +40,7 @@ interface ClipStore {
 export const useClipStore = create<ClipStore>((set, get) => ({
   clips: [],
   categories: [],
+  groups: [],
   selectedId: null,
   selectedIndex: 0,
   categoryId: "all",
@@ -115,16 +118,37 @@ export const useClipStore = create<ClipStore>((set, get) => ({
 
   loadCategories: async () => {
     const categories = await ipc.listCategories();
-    set({ categories });
+    set({
+      categories: categories.filter((c) => c.id !== "pinned"),
+    });
+  },
+
+  loadGroups: async () => {
+    const groups = await ipc.listGroups();
+    set({ groups });
   },
 
   refresh: async () => {
     await get().load();
   },
 
-  pin: async (id, pinned) => {
-    await ipc.pinClip(id, pinned);
-    await get().refresh();
+  setClipGroup: async (id, groupId) => {
+    const prev = get().clips.find((c) => c.id === id);
+    try {
+      const updated = await ipc.setClipGroup(id, groupId);
+      set((state) => ({
+        clips: state.clips.map((c) => (c.id === id ? updated : c)),
+      }));
+    } catch (e) {
+      if (prev) {
+        set((state) => ({
+          clips: state.clips.map((c) => (c.id === id ? prev : c)),
+        }));
+      }
+      const msg = e instanceof Error ? e.message : "分组操作失败";
+      useToast.getState().show(msg);
+      throw e;
+    }
   },
 
   remove: async (id) => {

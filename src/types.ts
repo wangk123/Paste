@@ -8,7 +8,8 @@ export interface Clip {
   hash: string;
   size: number;
   categoryId?: string | null;
-  pinned: boolean;
+  groupId?: string | null;
+  groupLabel?: string | null;
   language?: string | null;
   sourceApp?: string | null;
   createdAt: number;
@@ -22,6 +23,23 @@ export interface Category {
   color: string;
   icon: string;
   sortOrder: number;
+}
+
+export interface PreviewShowPayload {
+  clipId: string;
+  imagePath: string;
+  displayWidth: number;
+  displayHeight: number;
+  intrinsicWidth: number;
+  intrinsicHeight: number;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  createdAt: number;
 }
 
 export interface AppConfig {

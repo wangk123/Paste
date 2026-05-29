@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, AccessibilityInfo, Category, Clip } from "../types";
+import type {
+  AppConfig,
+  AccessibilityInfo,
+  Category,
+  Clip,
+  Group,
+} from "../types";
 
 export const listClips = (params: {
   offset?: number;
@@ -30,8 +36,18 @@ export const copyClip = (id: string) => invoke<void>("copy_clip", { id });
 
 export const deleteClip = (id: string) => invoke<void>("delete_clip", { id });
 
-export const pinClip = (id: string, pinned: boolean) =>
-  invoke<Clip>("pin_clip", { id, pinned });
+export const setClipGroup = (id: string, groupId: string | null) =>
+  invoke<Clip>("set_clip_group", { id, groupId });
+
+export const listGroups = () => invoke<Group[]>("list_groups");
+
+export const upsertGroup = (group: Group) =>
+  invoke<Group>("upsert_group", { group });
+
+export const deleteGroup = (id: string) => invoke<void>("delete_group", { id });
+
+export const countClipsInGroup = (groupId: string) =>
+  invoke<number>("count_clips_in_group", { groupId });
 
 export const setClipCategory = (id: string, categoryId: string | null) =>
   invoke<Clip>("set_clip_category", { id, categoryId });
@@ -51,6 +67,11 @@ export const updateSettings = (config: AppConfig) =>
 
 export const updateShortcut = (shortcut: string) =>
   invoke<AppConfig>("update_shortcut", { shortcut });
+
+export const openImagePreview = (clipId: string) =>
+  invoke<void>("open_image_preview", { clipId });
+
+export const closeImagePreview = () => invoke<void>("close_image_preview");
 
 export const hideWindow = () => invoke<void>("hide_window");
 

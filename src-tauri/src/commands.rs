@@ -1,15 +1,17 @@
 use crate::clipboard::watcher::write_clipboard;
-use crate::focus::restore_focus_and_paste;
+use crate::focus::{accessibility_effective, restore_focus_and_paste};
 use crate::config::{save_config, AppConfig};
 use crate::focus::activate_focus_target;
+use crate::preview_window::close_image_preview as hide_preview;
+use crate::preview_window::open_image_preview as show_preview;
 use crate::shortcuts::manager::{
     hide_main_window, hide_settings_window, show_main_window, show_settings_window,
     update_toggle_shortcut,
 };
 use crate::storage::cleanup::run_cleanup_now;
-use crate::storage::models::{Category, Clip, ListClipsParams, SearchClipsParams};
+use crate::storage::models::{Category, Clip, Group, ListClipsParams, SearchClipsParams};
 use crate::AppState;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 #[tauri::command]
 pub fn list_clips(state: State<AppState>, params: ListClipsParams) -> Result<Vec<Clip>, String> {
@@ -32,8 +34,33 @@ pub fn delete_clip(state: State<AppState>, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn pin_clip(state: State<AppState>, id: String, pinned: bool) -> Result<Clip, String> {
-    state.db.pin_clip(&id, pinned)
+pub fn set_clip_group(
+    state: State<AppState>,
+    id: String,
+    group_id: Option<String>,
+) -> Result<Clip, String> {
+    let config = state.config.lock().clone();
+    state.db.set_clip_group(&id, group_id, &config)
+}
+
+#[tauri::command]
+pub fn list_groups(state: State<AppState>) -> Result<Vec<Group>, String> {
+    state.db.list_groups()
+}
+
+#[tauri::command]
+pub fn upsert_group(state: State<AppState>, group: Group) -> Result<Group, String> {
+    state.db.upsert_group(&group)
+}
+
+#[tauri::command]
+pub fn delete_group(state: State<AppState>, id: String) -> Result<(), String> {
+    state.db.delete_group(&id)
+}
+
+#[tauri::command]
+pub fn count_clips_in_group(state: State<AppState>, group_id: String) -> Result<i64, String> {
+    state.db.count_clips_in_group(&group_id)
 }
 
 #[tauri::command]
@@ -130,20 +157,25 @@ fn paste_clip_inner(
     id: String,
     plain: bool,
 ) -> Result<(), String> {
-    let clip = state.db.get_clip(&id)?;
+    let config = state.config.lock().clone();
+    let clip = state.db.bump_clip_to_front(&id, &config)?;
     write_clipboard(&clip)?;
+    let _ = hide_preview(app);
     hide_main_window(app);
+    let _ = app.emit("clip-added", ());
 
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(120));
-        if let Err(e) = activate_focus_target() {
-            eprintln!("[paste] 恢复前台应用失败: {e}");
-        }
-        std::thread::sleep(std::time::Duration::from_millis(220));
-        if let Err(e) = restore_focus_and_paste(plain) {
-            eprintln!("[paste] 粘贴注入失败: {e}");
-        }
-    });
+    if accessibility_effective() {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(120));
+            if let Err(e) = activate_focus_target() {
+                eprintln!("[paste] 恢复前台应用失败: {e}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(220));
+            if let Err(e) = restore_focus_and_paste(plain) {
+                eprintln!("[paste] 粘贴注入失败: {e}");
+            }
+        });
+    }
 
     Ok(())
 }
@@ -152,6 +184,24 @@ fn paste_clip_inner(
 pub fn copy_clip(state: State<AppState>, id: String) -> Result<(), String> {
     let clip = state.db.get_clip(&id)?;
     write_clipboard(&clip)
+}
+
+#[tauri::command]
+pub fn open_image_preview(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    clip_id: String,
+) -> Result<(), String> {
+    let clip = state.db.get_clip(&clip_id)?;
+    if clip.clip_type != "image" {
+        return Err("not an image clip".into());
+    }
+    show_preview(&app, &clip_id, &clip.content)
+}
+
+#[tauri::command]
+pub fn close_image_preview(app: tauri::AppHandle) -> Result<(), String> {
+    hide_preview(&app)
 }
 
 #[tauri::command]

@@ -1,8 +1,12 @@
 use crate::config::{db_path, ensure_dirs, images_dir, AppConfig};
-use crate::storage::models::{Category, Clip, ListClipsParams, SearchClipsParams};
+use crate::storage::models::{Category, Clip, Group, ListClipsParams, SearchClipsParams};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::fs;
 use std::sync::Mutex;
+
+const CLIP_SELECT: &str = "SELECT c.id, c.type, c.content, c.preview, c.hash, c.size, c.category_id, c.language, c.source_app, c.created_at, c.expires_at, c.thumbnail_path, c.group_id, g.name FROM clips c LEFT JOIN groups g ON c.group_id = g.id";
+
+const MIGRATED_PINNED_GROUP_ID: &str = "migrated-pinned";
 
 pub struct Db {
     conn: Mutex<Connection>,
@@ -17,6 +21,15 @@ impl Db {
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             PRAGMA foreign_keys=ON;
+
+            CREATE TABLE IF NOT EXISTS groups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            );
 
             CREATE TABLE IF NOT EXISTS categories (
                 id TEXT PRIMARY KEY,
@@ -34,16 +47,16 @@ impl Db {
                 hash TEXT NOT NULL,
                 size INTEGER NOT NULL DEFAULT 0,
                 category_id TEXT,
-                pinned INTEGER NOT NULL DEFAULT 0,
+                group_id TEXT,
                 language TEXT,
                 source_app TEXT,
                 created_at INTEGER NOT NULL,
                 expires_at INTEGER,
                 thumbnail_path TEXT,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE SET NULL
             );
 
-            CREATE INDEX IF NOT EXISTS idx_clips_pinned_created ON clips(pinned DESC, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_clips_category ON clips(category_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_clips_expires ON clips(expires_at);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_clips_hash ON clips(hash);
@@ -72,11 +85,54 @@ impl Db {
         )
         .map_err(|e| e.to_string())?;
 
+        Self::migrate_schema(&conn)?;
         Self::seed_categories(&conn)?;
 
         Ok(Self {
             conn: Mutex::new(conn),
         })
+    }
+
+    fn migrate_schema(conn: &Connection) -> Result<(), String> {
+        if !column_exists(conn, "clips", "group_id")? {
+            conn.execute(
+                "ALTER TABLE clips ADD COLUMN group_id TEXT REFERENCES groups(id) ON DELETE SET NULL",
+                [],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clips_group ON clips(group_id, created_at DESC)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+
+        if column_exists(conn, "clips", "pinned")? {
+            let now = chrono::Utc::now().timestamp();
+            conn.execute(
+                "INSERT OR IGNORE INTO groups (id, name, label, description, sort_order, created_at) VALUES (?1, '收藏', '', '', 0, ?2)",
+                params![MIGRATED_PINNED_GROUP_ID, now],
+            )
+            .map_err(|e| e.to_string())?;
+
+            conn.execute(
+                "UPDATE clips SET group_id = ?1, expires_at = NULL WHERE pinned = 1",
+                params![MIGRATED_PINNED_GROUP_ID],
+            )
+            .map_err(|e| e.to_string())?;
+
+            conn.execute("DROP INDEX IF EXISTS idx_clips_pinned_created", [])
+                .map_err(|e| e.to_string())?;
+
+            conn.execute("ALTER TABLE clips DROP COLUMN pinned", [])
+                .map_err(|e| e.to_string())?;
+        }
+
+        conn.execute("DELETE FROM categories WHERE id = 'pinned'", [])
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 
     fn seed_categories(conn: &Connection) -> Result<(), String> {
@@ -93,7 +149,6 @@ impl Db {
             ("code", "代码", "#8b5cf6", "code", 3),
             ("markdown", "Markdown", "#06b6d4", "file-text", 4),
             ("file", "文件", "#ef4444", "file", 5),
-            ("pinned", "收藏", "#ec4899", "star", 6),
         ];
         for (id, name, color, icon, order) in defaults {
             conn.execute(
@@ -118,14 +173,8 @@ impl Db {
 
         if let Some(id) = existing {
             conn.execute(
-                "UPDATE clips SET created_at = ?1, expires_at = ?2, preview = ?3, pinned = MAX(pinned, ?4) WHERE id = ?5",
-                params![
-                    clip.created_at,
-                    clip.expires_at,
-                    clip.preview,
-                    clip.pinned as i32,
-                    id
-                ],
+                "UPDATE clips SET created_at = ?1, expires_at = CASE WHEN group_id IS NOT NULL THEN NULL ELSE ?2 END, preview = ?3 WHERE id = ?4",
+                params![clip.created_at, clip.expires_at, clip.preview, id],
             )
             .map_err(|e| e.to_string())?;
             drop(conn);
@@ -133,7 +182,7 @@ impl Db {
         }
 
         conn.execute(
-            "INSERT INTO clips (id, type, content, preview, hash, size, category_id, pinned, language, source_app, created_at, expires_at, thumbnail_path)
+            "INSERT INTO clips (id, type, content, preview, hash, size, category_id, group_id, language, source_app, created_at, expires_at, thumbnail_path)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 clip.id,
@@ -143,7 +192,7 @@ impl Db {
                 clip.hash,
                 clip.size,
                 clip.category_id,
-                clip.pinned as i32,
+                clip.group_id,
                 clip.language,
                 clip.source_app,
                 clip.created_at,
@@ -158,19 +207,28 @@ impl Db {
 
     pub fn list_clips(&self, params: &ListClipsParams) -> Result<Vec<Clip>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        let mut sql = String::from(
-            "SELECT id, type, content, preview, hash, size, category_id, pinned, language, source_app, created_at, expires_at, thumbnail_path FROM clips WHERE 1=1",
-        );
+        let mut sql = format!("{CLIP_SELECT} WHERE 1=1");
+        let mut bind: Vec<Box<dyn rusqlite::types::ToSql>> = vec![];
 
         if let Some(cat) = &params.category_id {
-            match cat.as_str() {
-                "pinned" => sql.push_str(" AND pinned = 1"),
-                "all" => {}
-                "text" | "image" | "code" | "markdown" | "file" => {
-                    sql.push_str(&format!(" AND type = '{cat}'"));
+            if let Some(gid) = cat.strip_prefix("group:") {
+                if is_safe_id(gid) {
+                    sql.push_str(" AND c.group_id = ?");
+                    bind.push(Box::new(gid.to_string()));
                 }
-                _ => {
-                    sql.push_str(&format!(" AND category_id = '{cat}'"));
+            } else {
+                match cat.as_str() {
+                    "all" => {}
+                    "text" | "image" | "code" | "markdown" | "file" => {
+                        if is_safe_id(cat) {
+                            sql.push_str(&format!(" AND c.type = '{cat}'"));
+                        }
+                    }
+                    _ => {
+                        if is_safe_id(cat) {
+                            sql.push_str(&format!(" AND c.category_id = '{cat}'"));
+                        }
+                    }
                 }
             }
         }
@@ -178,15 +236,19 @@ impl Db {
         if let Some(t) = &params.clip_type {
             let safe: String = t.chars().filter(|c| c.is_alphanumeric()).collect();
             if !safe.is_empty() {
-                sql.push_str(&format!(" AND type = '{safe}'"));
+                sql.push_str(&format!(" AND c.type = '{safe}'"));
             }
         }
 
-        sql.push_str(" ORDER BY created_at DESC LIMIT ?1 OFFSET ?2");
+        sql.push_str(" ORDER BY c.created_at DESC LIMIT ? OFFSET ?");
+        bind.push(Box::new(params.limit));
+        bind.push(Box::new(params.offset));
 
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+            bind.iter().map(|b| b.as_ref()).collect();
         let rows = stmt
-            .query_map(params![params.limit, params.offset], row_to_clip)
+            .query_map(params_ref.as_slice(), row_to_clip)
             .map_err(|e| e.to_string())?;
 
         rows.collect::<Result<Vec<_>, _>>()
@@ -220,16 +282,15 @@ impl Db {
             .collect::<Vec<_>>()
             .join(" ");
 
-        let sql = "
-            SELECT c.id, c.type, c.content, c.preview, c.hash, c.size, c.category_id, c.pinned, c.language, c.source_app, c.created_at, c.expires_at, c.thumbnail_path
-            FROM clips c
+        let sql = format!(
+            "{CLIP_SELECT}
             INNER JOIN clips_fts fts ON c.rowid = fts.rowid
             WHERE clips_fts MATCH ?1
             ORDER BY c.created_at DESC
-            LIMIT ?2 OFFSET ?3
-        ";
+            LIMIT ?2 OFFSET ?3"
+        );
 
-        let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map(params![fts_query, params.limit, params.offset], row_to_clip)
             .map_err(|e| e.to_string())?;
@@ -240,12 +301,9 @@ impl Db {
 
     pub fn get_clip(&self, id: &str) -> Result<Clip, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.query_row(
-            "SELECT id, type, content, preview, hash, size, category_id, pinned, language, source_app, created_at, expires_at, thumbnail_path FROM clips WHERE id = ?1",
-            params![id],
-            row_to_clip,
-        )
-        .map_err(|e| e.to_string())
+        let sql = format!("{CLIP_SELECT} WHERE c.id = ?1");
+        conn.query_row(&sql, params![id], row_to_clip)
+            .map_err(|e| e.to_string())
     }
 
     pub fn delete_clip(&self, id: &str) -> Result<(), String> {
@@ -263,12 +321,41 @@ impl Db {
         Ok(())
     }
 
-    pub fn pin_clip(&self, id: &str, pinned: bool) -> Result<Clip, String> {
+    pub fn set_clip_group(
+        &self,
+        id: &str,
+        group_id: Option<String>,
+        config: &AppConfig,
+    ) -> Result<Clip, String> {
+        let expires_at = if group_id.is_some() {
+            None
+        } else {
+            config.expiry_timestamp()
+        };
         {
             let conn = self.conn.lock().map_err(|e| e.to_string())?;
             conn.execute(
-                "UPDATE clips SET pinned = ?1 WHERE id = ?2",
-                params![pinned as i32, id],
+                "UPDATE clips SET group_id = ?1, expires_at = ?2 WHERE id = ?3",
+                params![group_id, expires_at, id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        self.get_clip(id)
+    }
+
+    pub fn bump_clip_to_front(&self, id: &str, config: &AppConfig) -> Result<Clip, String> {
+        let clip = self.get_clip(id)?;
+        let now = chrono::Utc::now().timestamp();
+        let expires_at = if clip.group_id.is_some() {
+            None
+        } else {
+            config.expiry_timestamp()
+        };
+        {
+            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE clips SET created_at = ?1, expires_at = ?2 WHERE id = ?3",
+                params![now, expires_at, id],
             )
             .map_err(|e| e.to_string())?;
         }
@@ -285,6 +372,59 @@ impl Db {
             .map_err(|e| e.to_string())?;
         }
         self.get_clip(id)
+    }
+
+    pub fn list_groups(&self) -> Result<Vec<Group>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, label, description, sort_order, created_at FROM groups ORDER BY sort_order, created_at",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], row_to_group)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn upsert_group(&self, group: &Group) -> Result<Group, String> {
+        let name = group.name.trim();
+        if name.is_empty() {
+            return Err("分组名称不能为空".into());
+        }
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO groups (id, name, label, description, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET name=excluded.name, label=excluded.label, description=excluded.description, sort_order=excluded.sort_order",
+            params![
+                group.id,
+                name,
+                "",
+                group.description.trim(),
+                group.sort_order,
+                group.created_at,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(group.clone())
+    }
+
+    pub fn delete_group(&self, id: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute("DELETE FROM groups WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn count_clips_in_group(&self, group_id: &str) -> Result<i64, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row(
+            "SELECT COUNT(*) FROM clips WHERE group_id = ?1",
+            params![group_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())
     }
 
     pub fn list_categories(&self) -> Result<Vec<Category>, String> {
@@ -336,7 +476,7 @@ impl Db {
 
         let expired: Vec<(String, Option<String>, String)> = conn
             .prepare(
-                "SELECT id, thumbnail_path, type FROM clips WHERE pinned = 0 AND expires_at IS NOT NULL AND expires_at < ?1",
+                "SELECT id, thumbnail_path, type FROM clips WHERE group_id IS NULL AND expires_at IS NOT NULL AND expires_at < ?1",
             )
             .map_err(|e| e.to_string())?
             .query_map(params![now], |row| {
@@ -351,13 +491,13 @@ impl Db {
                 let _ = fs::remove_file(p);
             }
             if clip_type == "image" {
-                // content path is fetched below to avoid recursive db lock.
+                // content path is fetched below
             }
         }
 
         let expired_image_paths: Vec<String> = conn
             .prepare(
-                "SELECT content FROM clips WHERE pinned = 0 AND expires_at IS NOT NULL AND expires_at < ?1 AND type = 'image'",
+                "SELECT content FROM clips WHERE group_id IS NULL AND expires_at IS NOT NULL AND expires_at < ?1 AND type = 'image'",
             )
             .map_err(|e| e.to_string())?
             .query_map(params![now], |r| r.get(0))
@@ -370,7 +510,7 @@ impl Db {
 
         let deleted_expired = conn
             .execute(
-                "DELETE FROM clips WHERE pinned = 0 AND expires_at IS NOT NULL AND expires_at < ?1",
+                "DELETE FROM clips WHERE group_id IS NULL AND expires_at IS NOT NULL AND expires_at < ?1",
                 params![now],
             )
             .map_err(|e| e.to_string())? as u32;
@@ -384,7 +524,7 @@ impl Db {
             let excess = count - config.max_items as i64;
             let overflow_rows: Vec<(String, Option<String>, String, String)> = conn
                 .prepare(
-                    "SELECT id, thumbnail_path, type, content FROM clips WHERE pinned = 0 ORDER BY created_at ASC LIMIT ?1",
+                    "SELECT id, thumbnail_path, type, content FROM clips WHERE group_id IS NULL ORDER BY created_at ASC LIMIT ?1",
                 )
                 .map_err(|e| e.to_string())?
                 .query_map(params![excess], |row| {
@@ -427,6 +567,28 @@ impl Db {
     }
 }
 
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool, String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?;
+    for name in rows.flatten() {
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn is_safe_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+}
+
 fn row_to_clip(row: &rusqlite::Row<'_>) -> rusqlite::Result<Clip> {
     Ok(Clip {
         id: row.get(0)?,
@@ -436,12 +598,24 @@ fn row_to_clip(row: &rusqlite::Row<'_>) -> rusqlite::Result<Clip> {
         hash: row.get(4)?,
         size: row.get(5)?,
         category_id: row.get(6)?,
-        pinned: row.get::<_, i32>(7)? != 0,
-        language: row.get(8)?,
-        source_app: row.get(9)?,
-        created_at: row.get(10)?,
-        expires_at: row.get(11)?,
-        thumbnail_path: row.get(12)?,
+        language: row.get(7)?,
+        source_app: row.get(8)?,
+        created_at: row.get(9)?,
+        expires_at: row.get(10)?,
+        thumbnail_path: row.get(11)?,
+        group_id: row.get(12)?,
+        group_label: row.get(13)?,
+    })
+}
+
+fn row_to_group(row: &rusqlite::Row<'_>) -> rusqlite::Result<Group> {
+    Ok(Group {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        label: row.get(2)?,
+        description: row.get(3)?,
+        sort_order: row.get(4)?,
+        created_at: row.get(5)?,
     })
 }
 
@@ -465,6 +639,26 @@ fn parse_filter_query(query: &str) -> Option<FilterQuery> {
     None
 }
 
+fn resize_image_max_edge(img: &image::DynamicImage, max_edge: u32) -> image::DynamicImage {
+    let (w, h) = (img.width(), img.height());
+    let longest = w.max(h);
+    if longest <= max_edge {
+        return img.clone();
+    }
+    let (nw, nh) = if w >= h {
+        (
+            max_edge,
+            ((h as u64 * max_edge as u64) / w as u64).max(1) as u32,
+        )
+    } else {
+        (
+            ((w as u64 * max_edge as u64) / h as u64).max(1) as u32,
+            max_edge,
+        )
+    };
+    img.resize(nw, nh, image::imageops::FilterType::Lanczos3)
+}
+
 pub fn save_image_with_thumbnail(data: &[u8]) -> Result<(String, String), String> {
     let id = uuid::Uuid::new_v4().to_string();
     let img_dir = images_dir();
@@ -474,7 +668,8 @@ pub fn save_image_with_thumbnail(data: &[u8]) -> Result<(String, String), String
     let img = image::load_from_memory(data).map_err(|e| e.to_string())?;
     img.save(&original_path).map_err(|e| e.to_string())?;
 
-    let thumb = img.resize(128, 128, image::imageops::FilterType::Lanczos3);
+    const THUMB_MAX_EDGE: u32 = 480;
+    let thumb = resize_image_max_edge(&img, THUMB_MAX_EDGE);
     thumb.save(&thumb_path).map_err(|e| e.to_string())?;
 
     Ok((
@@ -547,4 +742,3 @@ fn detect_language(s: &str) -> Option<String> {
     }
     None
 }
-

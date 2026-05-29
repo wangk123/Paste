@@ -11,7 +11,8 @@ pub struct Clip {
     pub hash: String,
     pub size: i64,
     pub category_id: Option<String>,
-    pub pinned: bool,
+    pub group_id: Option<String>,
+    pub group_label: Option<String>,
     pub language: Option<String>,
     pub source_app: Option<String>,
     pub created_at: i64,
@@ -27,6 +28,18 @@ pub struct Category {
     pub color: String,
     pub icon: String,
     pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing)]
+    pub label: String,
+    pub description: String,
+    pub sort_order: i32,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

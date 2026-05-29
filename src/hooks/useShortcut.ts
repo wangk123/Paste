@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useClipStore } from "../stores/clipStore";
-import { hideWindow, pasteClipPlain } from "../lib/ipc";
+import { hideWindow, openImagePreview, pasteClipPlain } from "../lib/ipc";
 
 /** 对齐官方 Paste (pasteapp.io/help) 的键盘交互 */
 export function useShortcut() {
@@ -10,7 +10,6 @@ export function useShortcut() {
   const select = useClipStore((s) => s.select);
   const paste = useClipStore((s) => s.paste);
   const remove = useClipStore((s) => s.remove);
-  const pin = useClipStore((s) => s.pin);
   const refresh = useClipStore((s) => s.refresh);
   const setShowPreview = useClipStore((s) => s.setShowPreview);
 
@@ -83,11 +82,16 @@ export function useShortcut() {
 
       if (e.key === " " && clips[selectedIndex] && !isInput) {
         e.preventDefault();
-        setShowPreview(true, clips[selectedIndex]);
+        const clip = clips[selectedIndex];
+        if (clip.type === "image") {
+          await openImagePreview(clip.id);
+        } else {
+          setShowPreview(true, clip);
+        }
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [clips, selectedIndex, select, paste, remove, pin, setShowPreview]);
+  }, [clips, selectedIndex, select, paste, remove, setShowPreview]);
 }

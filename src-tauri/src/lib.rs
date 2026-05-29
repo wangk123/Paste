@@ -1,7 +1,9 @@
 mod clipboard;
 mod commands;
 mod config;
+mod display;
 mod focus;
+mod preview_window;
 mod shortcuts;
 mod storage;
 
@@ -88,6 +90,7 @@ pub fn run() {
             });
             shortcuts::manager::setup_main_window_events(&handle);
             shortcuts::manager::setup_settings_window_events(&handle);
+            preview_window::setup_preview_window_events(&handle);
             clipboard::watcher::start_watcher(handle.clone(), db.clone());
 
             // 仅供故障排查：PASTE_AUTO_SHOW=1 时启动 3 秒后自动呼出面板
@@ -109,7 +112,11 @@ pub fn run() {
             commands::search_clips,
             commands::get_clip,
             commands::delete_clip,
-            commands::pin_clip,
+            commands::set_clip_group,
+            commands::list_groups,
+            commands::upsert_group,
+            commands::delete_group,
+            commands::count_clips_in_group,
             commands::set_clip_category,
             commands::list_categories,
             commands::upsert_category,
@@ -120,6 +127,8 @@ pub fn run() {
             commands::paste_clip,
             commands::paste_clip_plain,
             commands::copy_clip,
+            commands::open_image_preview,
+            commands::close_image_preview,
             commands::hide_window,
             commands::show_window,
             commands::show_settings_window_cmd,

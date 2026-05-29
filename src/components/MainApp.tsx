@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
-import { CategoryTabs } from "./CategoryTabs";
+import { FilterBar } from "./FilterBar";
 import { ClipboardList } from "./ClipboardList";
 import { OcrResult } from "./OcrResult";
 import { Preview } from "./Preview";
@@ -58,6 +58,7 @@ function HotkeyHelp() {
 export function MainApp() {
   const load = useClipStore((s) => s.load);
   const loadCategories = useClipStore((s) => s.loadCategories);
+  const loadGroups = useClipStore((s) => s.loadGroups);
   const stats = useClipStore((s) => s.stats);
   const loadSettings = useSettingsStore((s) => s.load);
 
@@ -66,16 +67,18 @@ export function MainApp() {
   useEffect(() => {
     loadSettings();
     loadCategories();
-  }, [loadCategories, loadSettings]);
+    loadGroups();
+  }, [loadCategories, loadGroups, loadSettings]);
 
   useEffect(() => {
     const unlistenShow = listen("panel-shown", () => {
+      loadGroups();
       load();
     });
     return () => {
       unlistenShow.then((fn) => fn());
     };
-  }, [load]);
+  }, [load, loadGroups]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -135,12 +138,12 @@ export function MainApp() {
       </header>
 
       <div className="px-5 pb-2 shrink-0">
-        <CategoryTabs />
+        <FilterBar />
       </div>
 
       <ClipboardList />
 
-      <footer className="flex items-center justify-between px-5 py-2 text-[10px] text-[var(--ink-faint)] shrink-0 border-t border-[var(--line)]">
+      <footer className="flex items-center justify-between px-5 py-2.5 text-[10px] text-[var(--ink-faint)] shrink-0 border-t border-[var(--line)]">
         <span className="flex items-center gap-1.5">
           <span className="w-1 h-1 rounded-full bg-[var(--color-accent)] animate-pulse" />
           <span>{stats[0]} 条记录</span>

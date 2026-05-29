@@ -1,11 +1,20 @@
 use crate::config::AppConfig;
+use crate::display::{capture_pointer_location, monitor_at_pointer, position_on_monitor};
 use crate::focus::capture_focus_target;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, Size, WebviewWindow};
 
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 static FOCUS_WATCH_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+const STRIP_SIDE_MARGIN: f64 = 20.0;
+const STRIP_BOTTOM_MARGIN: f64 = 20.0;
+const STRIP_MIN_WIDTH: f64 = 640.0;
+/// 卡片 320 + 列表上下留白
+const STRIP_LIST_AREA_H: f64 = 348.0;
+/// 拖拽条 + 顶栏 + 筛选 + 底栏
+const STRIP_CHROME_H: f64 = 152.0;
 
 pub fn register_toggle_shortcut(app: &AppHandle, shortcut_str: &str) -> Result<(), String> {
     let shortcut: Shortcut = shortcut_str
@@ -83,7 +92,13 @@ pub fn show_settings_window(app: &AppHandle) {
     #[cfg(target_os = "macos")]
     macos_activate_app();
 
-    position_window_on_cursor_monitor(&window, 480.0, 560.0, true);
+    capture_pointer_location();
+    let monitor = monitor_at_pointer(app);
+    if let Some(ref m) = monitor {
+        position_on_monitor(&window, m, 480.0, 560.0, false, 0.0);
+    } else {
+        let _ = window.center();
+    }
     let _ = window.unminimize();
     let _ = window.set_always_on_top(true);
     let _ = window.show();
@@ -119,13 +134,41 @@ pub fn hide_settings_window(app: &AppHandle) {
 }
 
 fn show_paste_strip(app: &AppHandle, window: &WebviewWindow) {
+    capture_pointer_location();
     capture_focus_target();
-    position_window_on_cursor_monitor(window, 900.0, 420.0, false);
+    let monitor = monitor_at_pointer(app);
+    let (win_w, win_h) = paste_strip_logical_size(monitor.as_ref());
+    let size = Size::Logical(LogicalSize::new(win_w, win_h));
+    let _ = window.set_resizable(false);
+    let _ = window.set_min_size(Some(size));
+    let _ = window.set_max_size(Some(size));
+    let _ = window.set_size(size);
+    if let Some(ref m) = monitor {
+        position_on_monitor(window, m, win_w, win_h, true, STRIP_BOTTOM_MARGIN);
+    } else {
+        let _ = window.center();
+    }
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
     let _ = app.emit("panel-shown", ());
     start_focus_watch(app.clone(), window.clone());
+}
+
+fn paste_strip_logical_size(monitor: Option<&tauri::Monitor>) -> (f64, f64) {
+    let ideal_h = STRIP_LIST_AREA_H + STRIP_CHROME_H;
+
+    let Some(monitor) = monitor else {
+        return (1200.0, ideal_h);
+    };
+
+    let (screen_w, screen_h) = crate::display::logical_screen_size(monitor);
+
+    let win_w = (screen_w - STRIP_SIDE_MARGIN * 2.0).max(STRIP_MIN_WIDTH);
+    let max_h = (screen_h - STRIP_BOTTOM_MARGIN - 24.0).max(400.0);
+    let win_h = ideal_h.min(max_h);
+
+    (win_w, win_h)
 }
 
 fn start_focus_watch(app: AppHandle, window: WebviewWindow) {
@@ -137,6 +180,10 @@ fn start_focus_watch(app: AppHandle, window: WebviewWindow) {
                 break;
             }
             if !window.is_focused().unwrap_or(true) {
+                if crate::preview_window::preview_is_visible(&app) {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    continue;
+                }
                 let h = app.clone();
                 let _ = app.run_on_main_thread(move || hide_main_window(&h));
                 break;
@@ -144,63 +191,6 @@ fn start_focus_watch(app: AppHandle, window: WebviewWindow) {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });
-}
-
-fn monitor_at_cursor(window: &WebviewWindow) -> Option<tauri::Monitor> {
-    let cursor = window.cursor_position().ok()?;
-    window
-        .available_monitors()
-        .ok()?
-        .into_iter()
-        .find(|m| {
-            let pos = m.position();
-            let size = m.size();
-            let x = cursor.x;
-            let y = cursor.y;
-            x >= pos.x as f64
-                && y >= pos.y as f64
-                && x < (pos.x + size.width as i32) as f64
-                && y < (pos.y + size.height as i32) as f64
-        })
-        .or_else(|| window.current_monitor().ok().flatten())
-        .or_else(|| window.primary_monitor().ok().flatten())
-}
-
-fn position_window_on_cursor_monitor(
-    window: &WebviewWindow,
-    win_w: f64,
-    win_h: f64,
-    center: bool,
-) {
-    use tauri::{LogicalPosition, Position};
-
-    let monitor = monitor_at_cursor(window);
-
-    let Some(monitor) = monitor else {
-        let _ = window.center();
-        return;
-    };
-
-    let scale = monitor.scale_factor();
-    let screen_w_log = monitor.size().width as f64 / scale;
-    let screen_h_log = monitor.size().height as f64 / scale;
-    let origin_x_log = monitor.position().x as f64 / scale;
-    let origin_y_log = monitor.position().y as f64 / scale;
-
-    let (x, y) = if center {
-        (
-            origin_x_log + (screen_w_log - win_w) / 2.0,
-            origin_y_log + (screen_h_log - win_h) / 2.0,
-        )
-    } else {
-        let margin = 48.0;
-        (
-            origin_x_log + (screen_w_log - win_w) / 2.0,
-            origin_y_log + screen_h_log - win_h - margin,
-        )
-    };
-
-    let _ = window.set_position(Position::Logical(LogicalPosition::new(x, y)));
 }
 
 pub fn setup_main_window_events(app: &AppHandle) {
@@ -211,6 +201,9 @@ pub fn setup_main_window_events(app: &AppHandle) {
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(false) = event {
             if settings_is_visible(&app_handle) {
+                return;
+            }
+            if crate::preview_window::preview_is_visible(&app_handle) {
                 return;
             }
             hide_main_window(&app_handle);

@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useRef } from "react";
+import { openImagePreview } from "../lib/ipc";
 import { useClipStore } from "../stores/clipStore";
 import { ClipItem } from "./ClipItem";
 import { ClipContextMenu } from "./ContextMenu";
@@ -15,7 +16,6 @@ export function ClipboardList() {
   const loading = useClipStore((s) => s.loading);
   const select = useClipStore((s) => s.select);
   const paste = useClipStore((s) => s.paste);
-  const pin = useClipStore((s) => s.pin);
   const setShowPreview = useClipStore((s) => s.setShowPreview);
   const openOcr = useClipStore((s) => s.openOcr);
 
@@ -69,12 +69,12 @@ export function ClipboardList() {
   return (
     <div
       ref={parentRef}
-      className="flex-1 overflow-x-auto overflow-y-hidden px-5 pb-3"
+      className="flex-1 overflow-x-auto overflow-y-hidden px-5 pb-4 min-h-0"
     >
       <div
         style={{
           width: virtualizer.getTotalSize(),
-          height: 340,
+          height: 348,
           position: "relative",
         }}
       >
@@ -100,8 +100,13 @@ export function ClipboardList() {
                     selected={selectedId === clip.id}
                     onSelect={() => select(clip.id, item.index)}
                     onPaste={() => paste(clip.id)}
-                    onPin={() => pin(clip.id, !clip.pinned)}
-                    onPreview={() => setShowPreview(true, clip)}
+                    onPreview={() => {
+                      if (clip.type === "image") {
+                        openImagePreview(clip.id);
+                      } else {
+                        setShowPreview(true, clip);
+                      }
+                    }}
                     onOcr={() => openOcr(clip)}
                   />
                 </div>
